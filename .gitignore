@@ -1,0 +1,12 @@
+*.so
+*.o
+*.a
+*.out
+*.exe
+*.dll
+*.dylib
+
+__pycache__/
+*.pyc
+
+.DS_store
