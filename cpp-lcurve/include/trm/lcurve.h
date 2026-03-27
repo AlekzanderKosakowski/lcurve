@@ -42,12 +42,12 @@ namespace Lcurve {
     typedef std::vector<std::pair<double,double> > etype;
 
     //! Default constructor
-  Point() : posn(), dirn(), area(0.), gravity(1.), eclipse(), flux(0.) {}
+  Point() : posn(), dirn(), area(0.), gravity(1.), eclipse(), flux(0.), temp(0.) {}
 
     //! Constructor
     Point(const Subs::Vec3& posn_, const Subs::Vec3& dirn_, double area_, double gravity_,
           const etype& eclipse) :
-    posn(posn_), dirn(dirn_), area(area_), gravity(gravity_), eclipse(eclipse), flux(0.) {}
+    posn(posn_), dirn(dirn_), area(area_), gravity(gravity_), eclipse(eclipse), flux(0.), temp(0.) {}
 
     //! Position vector of element (units of binary separation)
     Subs::Vec3 posn;
@@ -66,6 +66,9 @@ namespace Lcurve {
 
     //! Brightness * area
     float flux;
+
+    //! Local temperature (think starspots and gravity darkening)
+    float temp;
 
     //! Computes whether a point is visible (else eclipsed)
     bool visible(double phase) const {
@@ -612,17 +615,23 @@ namespace Lcurve {
     //! Individual scaling of components or not
     bool iscale;
 
+    //! Use finite surface elements from star1 to irradiate star2.
+    //! Allows the donor to be irradiated by starspots on the surface of the accretor (think direct-impact accretion)
+    //! Very slow due to nested loop. Seems to be ~3x slower than without.
+    //! Be sure to use small values for nlat1c, nlat2c, nlat1f, nlat2f
+    bool finite_irr12;
+
     //! Returns relative radii, accounting for method of parameterising them
     void get_r1r2(double& rr1, double& rr2) const {
       if(this->use_radii){
-	rr1 = this->r1;
-	rr2 = this->r2;
+    	rr1 = this->r1;
+    	rr2 = this->r2;
       }else{
-	double sini  = std::sin(Subs::deg2rad(this->iangle)); 
-	double r2pr1 = std::sqrt(1.-std::pow(sini*std::cos(2.*M_PI*this->cphi4.value),2));
-	double r2mr1 = std::sqrt(1.-std::pow(sini*std::cos(2.*M_PI*this->cphi3.value),2));
-	rr1 = (r2pr1 - r2mr1)/2.;
-	rr2 = (r2pr1 + r2mr1)/2.;
+    	double sini  = std::sin(Subs::deg2rad(this->iangle)); 
+    	double r2pr1 = std::sqrt(1.-std::pow(sini*std::cos(2.*M_PI*this->cphi4.value),2));
+    	double r2mr1 = std::sqrt(1.-std::pow(sini*std::cos(2.*M_PI*this->cphi3.value),2));
+    	rr1 = (r2pr1 - r2mr1)/2.;
+    	rr2 = (r2pr1 + r2mr1)/2.;
       }
       return;
     }

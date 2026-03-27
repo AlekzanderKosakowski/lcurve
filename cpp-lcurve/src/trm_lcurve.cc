@@ -149,6 +149,7 @@ Lcurve::Model::Model(const std::string& file) {
     names["add_spot"] = false;
     names["nspot"] = false;
     names["iscale"] = false;
+    names["finite_irr12"] = false;
 
     // Parameter value pairs
     std::map<std::string, std::string> pv;
@@ -220,11 +221,11 @@ Lcurve::Model::Model(const std::string& file) {
     bool ok = true;
     for(NIT nit=names.begin(); nit!=names.end(); nit++){
         if(!nit->second){
-            if(nit->first == "pdot" || nit->first == "third" ||
-	       nit->first == "temp_edge" || nit->first == "absorb_edge"){
-                std::cerr << nit->first
-                          << " was not defined; will be set = 0" << std::endl;
+            if(nit->first == "pdot" || nit->first == "third" || nit->first == "temp_edge" || nit->first == "absorb_edge"){
+                std::cerr << nit->first << " was not defined; will be set = 0" << std::endl;
                 pv[nit->first] = "0 1.e-10 1.e-10 0 0";
+            }else if(nit->first == "finite_irr12"){
+                pv[nit->first] = "0";
             }else if(nit->first.substr(0,4) != "stsp" && nit->first.substr(0,4) != "uesp"){
                 std::cerr << nit->first << " was not defined " << std::endl;
                 ok = false;
@@ -414,6 +415,7 @@ Lcurve::Model::Model(const std::string& file) {
     add_spot         = Subs::string_to_bool(pv["add_spot"]);
     nspot            = Subs::string_to_int(pv["nspot"]);
     iscale           = Subs::string_to_bool(pv["iscale"]);
+    finite_irr12     = Subs::string_to_bool(pv["finite_irr12"]);
 
 }
 
@@ -1755,6 +1757,7 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "add_spot       = " << model.add_spot       << "\n";
     s << "nspot          = " << model.nspot          << "\n";
     s << "iscale         = " << model.iscale         << "\n";
+    s << "finite_irr12   = " << model.finite_irr12   << "\n";
     return s;
 }
 

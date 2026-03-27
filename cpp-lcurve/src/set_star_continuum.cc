@@ -138,33 +138,33 @@ void Lcurve::set_star_continuum(const Model& mdl,
         }
 
         if(is_uespot){
-	  // equatorial spot
-	  Subs::Vec3 evec(star1[i].posn.x(),star1[i].posn.y(),0);
-	  double evecl = evec.length();
-	  if(evecl > 0.){
-
-	    // compute latitude and longitude offset
-	    double rd = star1[i].posn.length();
-	    double clat = Subs::dot(star1[i].posn, evec) / evecl / rd;
-	    clat = std::min(1.0, std::max(-1., clat));
-	    double dlat = Subs::rad2deg(std::acos(clat));
-	    
-	    double clong = Subs::dot(uespot, evec)/evecl;
-	    clong = std::min(1.0, std::max(-1., clong));
-	    double dlong = Subs::rad2deg(std::acos(clong));
-	    if(dlat <= mdl.uesp_lathw && dlong <= longhw){
-	      t1 = mdl.uesp_temp;
-	    }else if(dlat <= mdl.uesp_lathw){
-	      t1 += (mdl.uesp_temp-mdl.t1)*std::exp(-(dlong-longhw)/mdl.uesp_taper);
-	    }else if(dlong <= longhw){
-	      t1 += (mdl.uesp_temp-mdl.t1)*std::exp(-(dlat-mdl.uesp_lathw)/mdl.uesp_taper);
-	    }else{
-	      t1 += (mdl.uesp_temp-mdl.t1)*
-                std::exp(-(dlat-mdl.uesp_lathw)/mdl.uesp_taper)*
-                std::exp(-(dlong-longhw)/mdl.uesp_taper);
-	    }
-	  }
-	}
+          // equatorial spot
+          Subs::Vec3 evec(star1[i].posn.x(),star1[i].posn.y(),0);
+          double evecl = evec.length();
+          if(evecl > 0.){
+    
+            // compute latitude and longitude offset
+            double rd = star1[i].posn.length();
+            double clat = Subs::dot(star1[i].posn, evec) / evecl / rd;
+            clat = std::min(1.0, std::max(-1., clat));
+            double dlat = Subs::rad2deg(std::acos(clat));
+            
+            double clong = Subs::dot(uespot, evec)/evecl;
+            clong = std::min(1.0, std::max(-1., clong));
+            double dlong = Subs::rad2deg(std::acos(clong));
+            if(dlat <= mdl.uesp_lathw && dlong <= longhw){
+              t1 = mdl.uesp_temp;
+            }else if(dlat <= mdl.uesp_lathw){
+              t1 += (mdl.uesp_temp-mdl.t1)*std::exp(-(dlong-longhw)/mdl.uesp_taper);
+            }else if(dlong <= longhw){
+              t1 += (mdl.uesp_temp-mdl.t1)*std::exp(-(dlat-mdl.uesp_lathw)/mdl.uesp_taper);
+            }else{
+              t1 += (mdl.uesp_temp-mdl.t1)*
+                      std::exp(-(dlat-mdl.uesp_lathw)/mdl.uesp_taper)*
+                      std::exp(-(dlong-longhw)/mdl.uesp_taper);
+    	    }
+    	  }
+    	}
 	
         if(mu >= r2){
 
@@ -191,9 +191,12 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // No irradiation
             geom = 0.;
             temp = t1*pow(double(star1[i].gravity),GDCBOL1);
-
+            
         }
 
+        // Assign temperature to the surface element. Used for starspot irradiation on star2 later.
+        star1[i].temp = temp;
+            
         // At this stage also add in a directly reflected part too
         star1[i].flux  = star1[i].area*Subs::planck(mdl.wavelength, temp);
 
@@ -238,61 +241,111 @@ void Lcurve::set_star_continuum(const Model& mdl,
         slat22  = std::sin(Subs::deg2rad(mdl.stsp22_lat.value));
 	spot22 = Subs::Vec3(clat22*clong22, clat22*slong22, slat22);
     }
-	
-    for(int i=0; i<nelem2; i++){
-        vec = cofm1 - star2[i].posn;
-        r   = vec.length();
-        mu  = Subs::dot(star2[i].dirn,vec)/r;
 
-        // compute unirradiated temperature allowing for
-        // offset from spot centre
+    // Star1 surface elements have been completely built with starspots included by now.
+    // Now use star1's surface elements in a nested loop with star2's surface elements to find star2's flux, including irradiation from starspots.
+    for(int i=0; i<nelem2; i++){
+
+        // Begin with a single temperature for all surface elements
         double t2 = Subs::abs(double(mdl.t2));
+
+        // Increase temperature based on starspot parameters.
         if(is_spot21){
             Subs::Vec3 off = star2[i].posn-cofm2;
-            double dist =
-                Subs::rad2deg(std::acos(Subs::dot(off, spot21)/
-                                        off.length()));
-            t2 += (mdl.stsp21_tcen-t2)*
-                std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
+            double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot21)/off.length()));
+            t2 += (mdl.stsp21_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
         }
-
-	if(is_spot22){
+    	if(is_spot22){
             Subs::Vec3 off = star2[i].posn-cofm2;
-            double dist =
-                Subs::rad2deg(std::acos(Subs::dot(off, spot22)/
-                                        off.length()));
-            t2 += (mdl.stsp22_tcen-t2)*
-                std::exp(-Subs::sqr(dist/(mdl.stsp22_fwhm/Constants::EFAC))/2.);
+            double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot22)/off.length()));
+            t2 += (mdl.stsp22_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp22_fwhm/Constants::EFAC))/2.);
         }
 
-        if(mu >= r1){
+        
 
-            geom = Subs::sqr(r1/r)*mu;
-            temp = pow(pow(t2*
-                           pow(double(star2[i].gravity),GDCBOL2),4)
-                       + mdl.absorb*pow(mdl.t1,4.)*geom, 0.25);
+        
+        if(mdl.finite_irr12){ // Use finite surface elements from star1 to irradiate star2.
+                              // Allows the donor to be irradiated by starspots on the surface of the accretor (think direct-impact accretion).
+        
+            // Adjust temperature based on gravity darkening
+            double T_intrinsic = t2 * pow(double(star2[i].gravity), GDCBOL2);
+    
+            // Begin loop over star1's elements for precise irradiations
+            double F_irradiation = 0.0;  // Accumulate irradiation flux across all star1 surface elements
+            // ---- Loop over star1 elements ----
+            for(int j=0; j<nelem1; j++){
+                // Vector from star2 element to this star1 element
+                Subs::Vec3 vec12 = star1[j].posn - star2[i].posn;
+                double r12 = vec12.length(); // For geometric dilution
+        
+                // Cosine of angle between star1 element normal and direction to star2
+                double mu1 = Subs::dot(star1[j].dirn, -vec12) / r12;
+        
+                // Cosine of angle between star2 element normal and direction to star1 element
+                double mu2 = Subs::dot(star2[i].dirn, vec12) / r12;
+        
+                // Only include contribution if both elements face each other (ignores edge cases like rotation/beaming)
+                if(mu1 > 0.0 && mu2 > 0.0){
+                    
+                    // Geometric factor: projected area / distance^2
+                    double geom_factor = mu1 * mu2 * star1[j].area / (r12*r12);
+        
+                    // Add to irradiation flux (absorbed fraction)
+                    F_irradiation += mdl.absorb * pow(star1[j].temp, 4) * geom_factor;
+                }
+            }
 
-        }else if(mu > -r1){
 
-            double x0 = -mu/r1;
-            geom = Subs::sqr(r1/r)*r1*(sqrt(1.-x0*x0)*(2+x0*x0)/3
-                                       - x0*(Constants::PI/2-asin(x0)))/
-                Constants::PI;
-            temp = pow(pow(t2*
-                           pow(double(star2[i].gravity),GDCBOL2),4)
-                       + mdl.absorb*pow(mdl.t1,4.)*geom, 0.25);
+            // Total effective temperature including irradiation
+            double T_eff = pow(pow(T_intrinsic, 4) + F_irradiation, 0.25);
+            // std::cout << i << "/" << nelem2 << " " << T_intrinsic << " " << F_irradiation << " " << T_eff << std::endl;
+            star2[i].temp = T_eff;
+                
+            // Compute monochromatic flux for this element
+            star2[i].flux = star2[i].area * Subs::planck(mdl.wavelength, T_eff);
 
-        }else{
+        }else{ // Treat star1 as a point source and use mdl.t1 and the center of star1 for irradiation on star2 (ignores spots and finite stellar radius for star1)
 
-            geom = 0.;
-            temp = t2*pow(double(star2[i].gravity), GDCBOL2);
-        }
+            vec = cofm1 - star2[i].posn;
+            r   = vec.length();
+            mu  = Subs::dot(star2[i].dirn,vec)/r;
 
-        star2[i].flux   = star2[i].area*Subs::planck(mdl.wavelength, temp);
-
-        if(mdl.mirror) star2[i].flux  +=
-                           star2[i].area*geom*
-                           Subs::planck(mdl.wavelength, mdl.t1);
+            // compute unirradiated temperature allowing for
+            // offset from spot centre
+            double t2 = Subs::abs(double(mdl.t2));
+            if(is_spot21){
+                Subs::Vec3 off = star2[i].posn-cofm2;
+                double dist =
+                    Subs::rad2deg(std::acos(Subs::dot(off, spot21)/
+                                            off.length()));
+                t2 += (mdl.stsp21_tcen-t2)*
+                    std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
+            }
+    
+            if(mu >= r1){
+                geom = Subs::sqr(r1/r)*mu;
+                temp = pow(pow(t2*pow(double(star2[i].gravity),GDCBOL2),4) + mdl.absorb*pow(mdl.t1,4.)*geom, 0.25);
+    
+            }else if(mu > -r1){
+                double x0 = -mu/r1;
+                geom = Subs::sqr(r1/r)*r1*(sqrt(1.-x0*x0)*(2+x0*x0)/3 - x0*(Constants::PI/2-asin(x0)))/Constants::PI;
+                temp = pow(pow(t2*pow(double(star2[i].gravity),GDCBOL2),4) + mdl.absorb*pow(mdl.t1,4.)*geom, 0.25);
+    
+            }else{
+                geom = 0.;
+                temp = t2*pow(double(star2[i].gravity), GDCBOL2);
+            }
+    
+            star2[i].flux = star2[i].area*Subs::planck(mdl.wavelength, temp);
+    
+            if(mdl.mirror){
+                star2[i].flux += star2[i].area*geom*Subs::planck(mdl.wavelength, mdl.t1);
+            }
+        }        
     }
+
 }
+// Do not iterate to calculate star1's flux based on star2's surface element flux.
+// TODO: Consider systems with starspot and disc. The disc may block irradiation.
+//     Check that the vector between star1[j].posn and star2[i].posn doesn't intersect disc[k].posn
 
