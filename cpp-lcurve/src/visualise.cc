@@ -127,6 +127,10 @@ int main(int argc, char* argv[]){
         Lcurve::set_star_grid(model, Roche::PRIMARY, true, star1);
         Lcurve::set_star_grid(model, Roche::SECONDARY, true, star2);
 
+        // Apply star continuum for coloring.
+        Lcurve::set_star_continuum(model, star1, star2);
+        
+        
         if(model.add_disc){
 
             rdisc1 = model.rdisc1 > 0. ? model.rdisc1 : r1;
@@ -205,25 +209,35 @@ int main(int argc, char* argv[]){
         cpgpap(width, (y2-y1)/(x2-x1));
 
 	// set up colours. sdOB means we swap blue and red for primary and secondary
-        if(reverse){
+    if(reverse){
 	    cpgscr(0,1,1,1);
 	    cpgscr(1,0,0,0);
-	    if(sdOB){
-		cpgscr(2,0,0,0.5);
-		cpgscr(3,0,0.3,0);
-		cpgscr(4,0.4,0,0);
-	    }else{
-		cpgscr(2,0.4,0,0);
-		cpgscr(3,0,0.3,0);
-		cpgscr(4,0,0,0.5);
-	    }
-	}else{
-	    if(sdOB){
-		cpgscr(2,0,0,1);
-		cpgscr(4,1,0,0);
-	    }
+        if(sdOB){
+    		cpgscr(2,0,0,0.5);
+    		cpgscr(3,0,0.3,0);
+    		cpgscr(4,0.4,0,0);
+        }else{
+    		cpgscr(2,0.4,0,0);
+    		cpgscr(3,0,0.3,0);
+    		cpgscr(4,0,0,0.5);
+        }
+    }else{
+        if(sdOB){
+            cpgscr(2,0,0,1);
+            cpgscr(4,1,0,0);
+    }
 	}
 
+    // Define a normalized color gradient on an RGB scale using PGPLOT's 16 color indices: 16-31
+    int ncol = 16;   // number of colors
+    for(int i = 0; i < ncol; i++){
+        float t = i / float(ncol - 1);  // normalize 0-1
+        float r = t;                    // red contribution increases
+        float g = 0.0;                  // green contribution remains fixed
+        float b = 1.0 - t;              // blue contribution decreases
+        cpgscr(16 + i, r, g, b);        // apply RGB to PGPLOT indices 16-31
+    }
+        
         // Make stars orbit around centre of mass of system
         const Subs::Vec3 cofm(model.q/(1.+model.q),0.,0.);
         Subs::Vec3 r, earth;
@@ -292,10 +306,41 @@ int main(int argc, char* argv[]){
 // plots visible points
 void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase){
     Subs::Vec3 r;
+
+    // Find the min/max flux for the object (not for the whole system)
+    float fmin = 1e30, fmax = -1e30;
+    for(int i=0; i<object.size(); i++){
+        fmin = std::min(fmin, (float)object[i].flux);
+        fmax = std::max(fmax, (float)object[i].flux);
+    }
+    double log_fmin = log10(fmin + 1e-20); // May use log scaling
+    double log_fmax = log10(fmax + 1e-20);
+    
+    int ncol = 16; // Number of color options hard-coded to 16 to pull from the 16 indices set earlier.
+
+    bool log_scaling = false;
+    
     for(int i=0; i<object.size(); i++){
         if(Subs::dot(earth, object[i].dirn) > 0. && object[i].visible(phase)){
+
             r = object[i].posn - cofm;
-            cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 1);
+
+            double point_flux = object[i].flux;
+            double log_point_flux = log10(point_flux + 1e-20);
+
+            double norm; // Normalize the point's flux.
+            if(log_scaling){
+                norm = (log_point_flux - log_fmin) / (log_fmax - log_fmin);
+            }else{
+                norm = (point_flux - fmin) / (fmax - fmin);
+            }
+            norm = std::min(1.0, std::max(0.0, norm)); // Ensure normalization between 0.0 and 1.0    
+            
+            int color = 16 + int(norm * (ncol - 1)); // Set the color index based on the normalization.
+            cpgsci(color);
+            
+            // Plot one data point. Use "17" for filled circles, "1" for small points
+            cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 1); 
         }
     }
 }
