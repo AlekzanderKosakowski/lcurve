@@ -402,7 +402,6 @@ def main(profile=False):
                                         ndim,
                                         log_probability,
                                         args=(init_params["parameter_name"],),
-                                        pool=pool,
                                         backend=backend,
                                        )
         sampler.run_mcmc(p0, nsteps, progress=False)
@@ -431,7 +430,7 @@ def main(profile=False):
 
 if __name__ == "__main__":
 
-    profile = bool(sys.argv[1])
+    profile = sys.argv[1].lower() in ["true", "1", "yes"]
     if profile:
         print("Running cProfile", flush=True)
         profile_filename = "profile_wrapper.prof"
