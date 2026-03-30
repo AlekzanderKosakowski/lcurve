@@ -264,7 +264,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
         
 
         
-        if(mdl.finite_irr12){ // Use finite surface elements from star1 to irradiate star2.
+        if(mdl.finite_irr12 && mdl.absorb > 0){ // Use finite surface elements from star1 to irradiate star2.
                               // Allows the donor to be irradiated by starspots on the surface of the accretor (think direct-impact accretion).
         
             // Adjust temperature based on gravity darkening
