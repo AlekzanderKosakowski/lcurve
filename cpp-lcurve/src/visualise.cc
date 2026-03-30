@@ -56,11 +56,36 @@ int    Lcurve::Fobj::neval = 0;
 double Lcurve::Fobj::chisq_min;
 Subs::Buffer1D<double> Lcurve::Fobj::scale_min;
 
+void define_viridis_colors() { // Manually define viridis color indices
+    float viridis[16][3] = {
+        {0.267, 0.004, 0.329},
+        {0.283, 0.141, 0.458},
+        {0.254, 0.265, 0.530},
+        {0.207, 0.372, 0.553},
+        {0.164, 0.471, 0.558},
+        {0.128, 0.567, 0.551},
+        {0.135, 0.659, 0.518},
+        {0.267, 0.749, 0.441},
+        {0.478, 0.821, 0.318},
+        {0.741, 0.873, 0.150},
+        {0.993, 0.906, 0.144},
+        {0.998, 0.980, 0.400},
+        {0.997, 0.997, 0.750},
+        {0.999, 0.998, 0.980},
+        {0.999, 0.999, 1.000},
+        {1.000, 1.000, 1.000}  // brightest yellow/white. Looks horrible with white background.
+    };
+
+    for(int i = 0; i < 16; i++){ // Assign each index
+        cpgscr(16 + i, viridis[i][0], viridis[i][1], viridis[i][2]);
+    }
+}
+
 // Main program
 int main(int argc, char* argv[]){
 
     // Defined at the end
-    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase);  
+    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax);  
   
     try{
     
@@ -129,6 +154,18 @@ int main(int argc, char* argv[]){
 
         // Apply star continuum for coloring.
         Lcurve::set_star_continuum(model, star1, star2);
+
+        // Find the min and max flux across the entire system.
+        // TODO: Add more loops for disc and accretion spot
+        double min_stat=1e20, max_stat=1e-20;
+        for(int i=0; i < star1.size(); i++){
+            if(star1[i].flux < min_stat){min_stat = star1[i].flux;}
+            if(star1[i].flux > max_stat){max_stat = star1[i].flux;}
+        }
+        for(int i=0; i < star2.size(); i++){
+            if(star2[i].flux < min_stat){min_stat = star2[i].flux;}
+            if(star2[i].flux > max_stat){max_stat = star2[i].flux;}
+        }
         
         
         if(model.add_disc){
@@ -157,7 +194,7 @@ int main(int argc, char* argv[]){
                 for(int i=0; i<star2.size(); i++){
                     eclipses =  Roche::disc_eclipse(model.iangle, rdisc1, rdisc2, model.beta_disc, model.height_disc, star2[i].posn);
                     for(size_t j=0; j<eclipses.size(); j++)
-                        star2[i].eclipse.push_back(eclipses[j]);  
+                        star2[i].eclipse.push_back(eclipses[j]);
                 }
             }
         }
@@ -227,7 +264,7 @@ int main(int argc, char* argv[]){
             cpgscr(4,1,0,0);
     }
 	}
-
+        
     // Define a normalized color gradient on an RGB scale using PGPLOT's 16 color indices: 16-31
     int ncol = 16;   // number of colors
     for(int i = 0; i < ncol; i++){
@@ -237,6 +274,13 @@ int main(int argc, char* argv[]){
         float b = 1.0 - t;              // blue contribution decreases
         cpgscr(16 + i, r, g, b);        // apply RGB to PGPLOT indices 16-31
     }
+
+    // Overwrite previous color definition with viridis
+    // define_viridis_colors();
+
+    // TODO: Build a set of preset color functions. Have user pass name + "reverse" to set colors externally.
+    // TODO: Add flag for user to set normalization by object or by system.
+
         
         // Make stars orbit around centre of mass of system
         const Subs::Vec3 cofm(model.q/(1.+model.q),0.,0.);
@@ -263,27 +307,27 @@ int main(int argc, char* argv[]){
 
             // star 1
             cpgsci(4);
-            plot_visible(star1, earth, cofm, xsky, ysky, phase);
+            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
 
             // star 2
             cpgsci(2);
-            plot_visible(star2, earth, cofm, xsky, ysky, phase);
+            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
 
             if(model.add_disc){
 
                 // disc surface
                 cpgsci(3);
-                plot_visible(disc, earth, cofm, xsky, ysky, phase);
+                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
 
                 // edges
                 cpgsci(1);
-                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase);
-                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase);
+                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
             }
 
             if(model.add_spot){
                 cpgsci(2);
-                plot_visible(stream, earth, cofm, xsky, ysky, phase);
+                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
                 cpgsci(2);
                 double cosbs = Subs::dot(earth, stream[stream.size()-1].posn);
                 if(cosbs > 0. && stream[stream.size()-1].visible(phase)){
@@ -304,22 +348,21 @@ int main(int argc, char* argv[]){
 
 
 // plots visible points
-void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase){
+void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax){
     Subs::Vec3 r;
 
     // Find the min/max flux for the object (not for the whole system)
-    float fmin = 1e30, fmax = -1e30;
-    for(int i=0; i<object.size(); i++){
-        fmin = std::min(fmin, (float)object[i].flux);
-        fmax = std::max(fmax, (float)object[i].flux);
-    }
-    double log_fmin = log10(fmin + 1e-20); // May use log scaling
+    // float fmin = 1e30, fmax = -1e30;
+    // for(int i=0; i<object.size(); i++){
+    //     fmin = std::min(fmin, (float)object[i].flux);
+    //     fmax = std::max(fmax, (float)object[i].flux);
+    // }
+    double log_fmin = log10(fmin + 1e-20);
     double log_fmax = log10(fmax + 1e-20);
+
+    bool log_scaling = true; // TODO: User defined color scaling (linear, log, power, square, square-root, etc)
     
     int ncol = 16; // Number of color options hard-coded to 16 to pull from the 16 indices set earlier.
-
-    bool log_scaling = false;
-    
     for(int i=0; i<object.size(); i++){
         if(Subs::dot(earth, object[i].dirn) > 0. && object[i].visible(phase)){
 
