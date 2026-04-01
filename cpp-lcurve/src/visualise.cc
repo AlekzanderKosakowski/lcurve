@@ -118,6 +118,12 @@ void set_colormap(std::string colormap, bool reverse, int ncolors) {
                 b = 1.0f - std::pow(u, 1.0f);
             }
             
+        // Other colormaps
+        }else if(cmap=="redblue"){
+            r = t;
+            g = 0.0;
+            b = 1.0 - t;
+            
         // Single color colormaps
         }else if(cmap=="black"){
             r = 0.0f;
@@ -189,7 +195,7 @@ int main(int argc, char* argv[]){
         float y2;
         input.get_value("y2", y2,  2.f, -100.f, 100.f, "upper Y limit");
         std::string colormap;
-        input.get_value("colormap", colormap, "inferno", "[viridis, inferno, magma, plasma, cividis, seismic, vanimo, black]");
+        input.get_value("colormap", colormap, "inferno", "[viridis, inferno, magma, plasma, cividis, seismic, vanimo, redblue, black]");
         std::string colorscale;
         input.get_value("colorscale", colorscale, "log", "[linear, log]");
         bool reverse;
@@ -214,8 +220,9 @@ int main(int argc, char* argv[]){
             colormap != "cividis" &&
             colormap != "vanimo" &&
             colormap != "seismic" &&
+            colormap != "redblue" &&
             colormap != "black") {
-            std::cerr << "Invalid colormap. Try one of [viridis, inferno, magma, plasma, cividis, seismic, vanimo, black]" << std::endl;
+            std::cerr << "Invalid colormap. Try one of [viridis, inferno, magma, plasma, cividis, seismic, vanimo, redblue, black]" << std::endl;
             exit(1);
         }
         
