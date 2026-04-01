@@ -128,7 +128,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
         	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot13)/star1[i].posn.length()));
     	    t1 += (mdl.stsp13_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp13_fwhm/Constants::EFAC))/2.);
         }
-        if(is_spot1i){
+        if(is_spot1i && mdl.stsp1i_fwhm_long1 > 0 && mdl.stsp1i_fwhm_long2 > 0 && mdl.stsp1i_fwhm_lat > 0){
             // Direct-impact starspot with approximate advective tail in the spin direction.
             
             // Latitude and longitudes all in radians here for trig calculations.
