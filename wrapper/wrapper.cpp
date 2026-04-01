@@ -279,11 +279,12 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("stsp22_lat", &Lcurve::Model::stsp22_lat)
         .def_readwrite("stsp22_fwhm", &Lcurve::Model::stsp22_fwhm)
         .def_readwrite("stsp22_tcen", &Lcurve::Model::stsp22_tcen)
-        .def_readwrite("uesp_long1", &Lcurve::Model::uesp_long1)
-        .def_readwrite("uesp_long2", &Lcurve::Model::uesp_long2)
-        .def_readwrite("uesp_lathw", &Lcurve::Model::uesp_lathw)
-        .def_readwrite("uesp_taper", &Lcurve::Model::uesp_taper)
-        .def_readwrite("uesp_temp", &Lcurve::Model::uesp_temp)
+        .def_readwrite("stsp1i_long", &Lcurve::Model::stsp1i_long)
+        .def_readwrite("stsp1i_lat", &Lcurve::Model::stsp1i_lat)
+        .def_readwrite("stsp1i_fwhm_lat", &Lcurve::Model::stsp1i_fwhm_lat)
+        .def_readwrite("stsp1i_fwhm_long1", &Lcurve::Model::stsp1i_fwhm_long1)
+        .def_readwrite("stsp1i_fwhm_long2", &Lcurve::Model::stsp1i_fwhm_long2)
+        .def_readwrite("stsp1i_tcen", &Lcurve::Model::stsp1i_tcen)
         .def_readonly("add_spot", &Lcurve::Model::add_spot)
         .def_readonly("add_disc", &Lcurve::Model::add_disc);
     
