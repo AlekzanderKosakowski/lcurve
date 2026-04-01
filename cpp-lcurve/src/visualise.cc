@@ -248,17 +248,18 @@ int main(int argc, char* argv[]){
 
         // Apply star continuum for coloring.
         Lcurve::set_star_continuum(model, star1, star2);
-
-        // Find the min and max flux across the entire system.
+        
+        // Find the min and max temperature across the entire system.
+        // Using "flux" adds an artificial gradient from equator to pole due to grid element area
         // TODO: Add more loops for disc and accretion spot.
         double min_stat=1e20, max_stat=1e-20;
         for(int i=0; i < star1.size(); i++){
-            if(star1[i].flux < min_stat){min_stat = star1[i].flux;}
-            if(star1[i].flux > max_stat){max_stat = star1[i].flux;}
+            if(star1[i].temp < min_stat){min_stat = star1[i].temp;}
+            if(star1[i].temp > max_stat){max_stat = star1[i].temp;}
         }
         for(int i=0; i < star2.size(); i++){
-            if(star2[i].flux < min_stat){min_stat = star2[i].flux;}
-            if(star2[i].flux > max_stat){max_stat = star2[i].flux;}
+            if(star2[i].temp < min_stat){min_stat = star2[i].temp;}
+            if(star2[i].temp > max_stat){max_stat = star2[i].temp;}
         }
         
         
@@ -434,8 +435,8 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
         fmin = 1e30;
         fmax = -1e30;
         for(int i=0; i<object.size(); i++){
-            fmin = std::min<double>(fmin, object[i].flux);
-            fmax = std::max<double>(fmax, object[i].flux);
+            fmin = std::min<double>(fmin, object[i].temp);
+            fmax = std::max<double>(fmax, object[i].temp);
         }
     }
 
@@ -443,9 +444,6 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
     double log_fmin = log10(fmin + 1e-20);
     double log_fmax = log10(fmax + 1e-20);
 
-    int ci1, ci2;
-    cpgqcir(&ci1, &ci2);
-    
     // Allowed up to 255 color indices with /cps (color postscript)
     // The first 16 are saved for PGPLOT defaults, such as background color
     for(int i=0; i<object.size(); i++){
@@ -453,7 +451,7 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
 
             r = object[i].posn - cofm;
 
-            double point_flux = object[i].flux;
+            double point_flux = object[i].temp;
             double log_point_flux = log10(point_flux + 1e-20);
 
             double norm; // Normalize the point's flux.
