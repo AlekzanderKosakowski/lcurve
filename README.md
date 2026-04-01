@@ -7,7 +7,7 @@ Modifications are described below.
 
 
 ### 1) "visualise" colors:
-visualise.cc now plots colors based on surface element flux, normalized by the [min_flux, max_flux] of all of the surface elements across star1 and star2 together. See the animations in "Starspot irradiation" section" example outputs.
+visualise.cc now plots colors based on surface element temperature, normalized by the [min_temperature, max_temperature] of all of the surface elements across star1 and star2 together.
 
 This has only been tested for stellar components, not for accretion discs or accretion stream-disc impact spots.
 
