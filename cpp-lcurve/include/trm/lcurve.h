@@ -496,20 +496,23 @@ namespace Lcurve {
     //! central temperature of spot
     Pparam stsp22_tcen;
 
-    //! start longitude of UE spot
-    Pparam uesp_long1;
+    //! longitude of impact spot
+    Pparam stsp1i_long;
 
-    //! end longitude of UE spot
-    Pparam uesp_long2;
+    //! longitude of impact spot
+    Pparam stsp1i_lat;
 
-    //! half width latitude of UE spot
-    Pparam uesp_lathw;
+    //! fwhm of impact spot in latitude direction
+    Pparam stsp1i_fwhm_lat;
 
-    //! exponential taper width degrees
-    Pparam uesp_taper;
+    //! fwhm of impact spot in upstream longitude direction
+    Pparam stsp1i_fwhm_long1;
 
-    //! temperature of UE spot
-    Pparam uesp_temp;
+    //! fwhm of impact spot in downstream longitude direction
+    Pparam stsp1i_fwhm_long2;
+
+    //! temperature of impact spot center
+    Pparam stsp1i_tcen;
 
     // Computational ones
 
