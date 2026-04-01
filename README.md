@@ -34,8 +34,8 @@ This was done via a nested loop, so the runtime increases significantly when ena
 
 ### 3) Direct-impact starspot with advection (new parameters: stsp1i\_):
 
-I've replaced the "uniform equatorial starspot" on star1 with a starspot that includes FWHM decay parameters for latitude and two longitude directions separately. The positive longitude direction corresponds to "downstream" relative to the stellar spin direction and includes an exponential tail to the flux decay to simulate advection probably seen in direct-impact accretion binaries. This new spot can be placed at any latitude to account for polar-like accretion from magnetic field lines.
+I've replaced the "uniform equatorial starspot" on star1 with a starspot that includes FWHM decay parameters for latitude and two longitude directions separately. The positive longitude direction corresponds to "downstream" relative to the stellar spin direction and includes an exponential tail to the flux decay to simulate advection in direct-impact accretion binaries. This new spot can be placed at any latitude to account for polar-like accretion onto magnetic poles.
 
-Longitudes are considered "upstream" only within -5\*stsp1i_fwhm_long1 of the impact spot center. All other longitudes are considered "downstream" and use stsp1i_fwhm_long2 to simulate Gaussian decay with an exponential tail, allowing the smeared spot to smoothly extend nearly the full 360 degrees around the stellar surface.
+Longitudes are considered "upstream" only within -5\*stsp1i_fwhm_long1 of the impact spot center. All other longitudes are considered "downstream" and use stsp1i_fwhm_long2 to simulate Gaussian decay with an exponential tail, allowing the smeared spot to smoothly extend nearly the full 360 degrees around the stellar surface. The animation below shows an exaggerated effect for demonstration.
 
 ![Example direct-impact accretion binary with "starspot" advection.](figures/direct_impact_advection_spot.gif)
