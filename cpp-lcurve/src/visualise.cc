@@ -59,7 +59,7 @@ int    Lcurve::Fobj::neval = 0;
 double Lcurve::Fobj::chisq_min;
 Subs::Buffer1D<double> Lcurve::Fobj::scale_min;
 
-//! Polynomial approximation of various colormaps
+// Polynomial approximation of various colormaps
 void set_colormap(std::string colormap, bool reverse, int ncolors) {
 
     std::string cmap = Subs::tolower(colormap);
@@ -139,7 +139,7 @@ void set_colormap(std::string colormap, bool reverse, int ncolors) {
 int main(int argc, char* argv[]){
 
     // Defined at the end
-    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors);  
+    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors, int plt_marker);  
   
     try{
     
@@ -162,6 +162,7 @@ int main(int argc, char* argv[]){
         input.sign_in("reverse", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // false,true
         input.sign_in("ncolors", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // < 240 (higher is not always better)
         input.sign_in("width",    Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
+        input.sign_in("marker",    Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
     
         std::string smodel;
         input.get_value("model", smodel, "model", "model file of parameter values");
@@ -187,8 +188,6 @@ int main(int argc, char* argv[]){
         input.get_value("y1", y1, -2.f, -100.f, 100.f, "lower Y limit");
         float y2;
         input.get_value("y2", y2,  2.f, -100.f, 100.f, "upper Y limit");
-        float width;
-        input.get_value("width", width,  8.f, 0.f, 100.f, "width of the plot (inches)");
         std::string colormap;
         input.get_value("colormap", colormap, "inferno", "[viridis, inferno, magma, plasma, cividis, seismic, vanimo, black]");
         std::string colorscale;
@@ -197,10 +196,15 @@ int main(int argc, char* argv[]){
         input.get_value("reverse", reverse, false, "[yes, no]");
         float ncols;
         input.get_value("ncolors", ncols, 32.f, 16.f, 239.f, "color grid resolution (< 240)");
+        float marker;
+        input.get_value("marker", marker,  1.f, -1.f, 20.f, "surface element marker style");
+        float width;
+        input.get_value("width", width,  8.f, 0.f, 100.f, "width of the plot (inches)");
         
         input.save();
 
         int ncolors = std::floor(ncols); // Force integer ncolors
+        int plt_marker = static_cast<int>(marker);
         
         // Complain if the user provides an invalid colormap
         if (colormap != "viridis" &&
@@ -381,27 +385,27 @@ int main(int argc, char* argv[]){
 
             // star 1
             cpgsci(4);
-            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
 
             // star 2
             cpgsci(2);
-            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
 
             if(model.add_disc){
 
                 // disc surface
                 cpgsci(3);
-                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
 
                 // edges
                 cpgsci(1);
-                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
-                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
+                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
             }
 
             if(model.add_spot){
                 cpgsci(2);
-                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, -1);
                 cpgsci(2);
                 double cosbs = Subs::dot(earth, stream[stream.size()-1].posn);
                 if(cosbs > 0. && stream[stream.size()-1].visible(phase)){
@@ -422,7 +426,7 @@ int main(int argc, char* argv[]){
 
 
 // plots visible points
-void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors){
+void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors, int plt_marker){
     Subs::Vec3 r;
 
     bool log_scaling = false;
@@ -466,7 +470,7 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
             cpgsci(color);
             
             // Plot one data point as a small dot.
-            cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 1); 
+            cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), plt_marker); 
         }
     }
 }
