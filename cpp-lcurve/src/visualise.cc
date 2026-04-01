@@ -35,7 +35,10 @@ visualise model nphase nphase (phase)/(phase1 phase2) device x1 x2 y1 y2
 !!arg{y1}{lower Y limit}
 !!arg{y2}{upper Y limit}
 !!arg{width}{width of plot in inches}
-!!arg{reverse}{reverse black and white (or not)}
+!!arg{colormap}{select from predefined sequential colormaps}
+!!arg{colorscale}{select from log or linear scaling of flux -> colormap}
+!!arg{reverse}{reverse the chosen colormap}
+!!arg{ncolors}{number of colors used to represent data}
 !!table
 
 !!end
@@ -56,36 +59,87 @@ int    Lcurve::Fobj::neval = 0;
 double Lcurve::Fobj::chisq_min;
 Subs::Buffer1D<double> Lcurve::Fobj::scale_min;
 
-void define_viridis_colors() { // Manually define viridis color indices
-    float viridis[16][3] = {
-        {0.267, 0.004, 0.329},
-        {0.283, 0.141, 0.458},
-        {0.254, 0.265, 0.530},
-        {0.207, 0.372, 0.553},
-        {0.164, 0.471, 0.558},
-        {0.128, 0.567, 0.551},
-        {0.135, 0.659, 0.518},
-        {0.267, 0.749, 0.441},
-        {0.478, 0.821, 0.318},
-        {0.741, 0.873, 0.150},
-        {0.993, 0.906, 0.144},
-        {0.998, 0.980, 0.400},
-        {0.997, 0.997, 0.750},
-        {0.999, 0.998, 0.980},
-        {0.999, 0.999, 1.000},
-        {1.000, 1.000, 1.000}  // brightest yellow/white. Looks horrible with white background.
-    };
+//! Polynomial approximation of various colormaps
+void set_colormap(std::string colormap, bool reverse, int ncolors) {
 
-    for(int i = 0; i < 16; i++){ // Assign each index
-        cpgscr(16 + i, viridis[i][0], viridis[i][1], viridis[i][2]);
+    std::string cmap = Subs::tolower(colormap);
+    
+    for(int i = 0; i < ncolors; i++){
+
+        float t = reverse ? 1.0f - i/float(ncolors-1) : i/float(ncolors - 1);
+
+        float r, g, b;
+
+        // Sequential colormaps
+        if(cmap=="viridis"){
+            r = 0.2f + 0.8f * std::pow(t, 1.5f);
+            g = 0.3f + 0.7f * std::pow(t, 1.0f);
+            b = 0.5f - 0.5f * std::pow(1.0f - t, 1.2f);
+        }else if(cmap=="inferno"){
+            r = std::pow(t, 0.5f);
+            g = std::pow(t, 1.5f);
+            b = std::pow(t, 3.0f);
+        }else if(cmap=="magma"){
+            r = 1.0f * std::pow(t, 0.8f);
+            g = 0.6f * std::pow(t, 1.4f);
+            b = 0.3f * std::pow(t, 2.0f);
+        }else if(cmap=="plasma"){
+            r = 0.1f + 0.9f * std::pow(t, 1.2f);
+            g = 0.0f + 0.8f * std::pow(t, 1.5f);
+            b = 0.4f + 0.6f * std::pow(1.0f - t, 0.8f);
+        }else if(cmap=="cividis"){
+            r = 0.0f + 1.0f * std::pow(t, 0.9f);
+            g = 0.1f + 0.9f * std::pow(t, 1.2f);
+            b = 0.3f + 0.7f * std::pow(t, 0.8f);
+            
+        // Diverging colormaps
+        }else if(cmap=="vanimo"){
+            if(t < 0.5f){ // purple to white
+                float u = t*2.0f;
+                r = 0.4f + 0.6f*u;
+                g = 0.0f + 1.0f*u;
+                b = 0.6f + 0.4f*u;
+            }else{ // white to green
+                float u = (t-0.5f)*2.0f;
+                r = 1.0f - 1.0f*u;
+                g = 1.0f;
+                b = 1.0f - 1.0f*u;
+            }
+        }else if(cmap=="seismic"){
+            if(t < 0.5f){ // blue to white
+                float u = t*2.0f;
+                r = std::pow(u, 1.0f);
+                g = std::pow(u, 1.0f);
+                b = 1.0f;
+            }else{ // white to red
+                float u = (t-0.5f)*2.0f;
+                r = 1.0f;
+                g = 1.0f - std::pow(u, 1.0f);
+                b = 1.0f - std::pow(u, 1.0f);
+            }
+            
+        // Single color colormaps
+        }else if(cmap=="black"){
+            r = 0.0f;
+            g = 0.0f;
+            b = 0.0f;
+        }
+        
+        r = std::min(1.0f, std::max(0.0f, r));
+        g = std::min(1.0f, std::max(0.0f, g));
+        b = std::min(1.0f, std::max(0.0f, b));
+        
+        cpgscr(16 + i, r, g, b); 
     }
 }
+
+
 
 // Main program
 int main(int argc, char* argv[]){
 
     // Defined at the end
-    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax);  
+    void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors);  
   
     try{
     
@@ -103,9 +157,11 @@ int main(int argc, char* argv[]){
         input.sign_in("x2",       Subs::Input::LOCAL,  Subs::Input::PROMPT);
         input.sign_in("y1",       Subs::Input::LOCAL,  Subs::Input::PROMPT);
         input.sign_in("y2",       Subs::Input::LOCAL,  Subs::Input::PROMPT);
+        input.sign_in("colormap", Subs::Input::LOCAL,  Subs::Input::PROMPT);
+        input.sign_in("colorscale", Subs::Input::LOCAL,  Subs::Input::PROMPT); // log,linear
+        input.sign_in("reverse", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // false,true
+        input.sign_in("ncolors", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // < 240 (higher is not always better)
         input.sign_in("width",    Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
-        input.sign_in("reverse",  Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
-        input.sign_in("sdOB",     Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
     
         std::string smodel;
         input.get_value("model", smodel, "model", "model file of parameter values");
@@ -133,19 +189,57 @@ int main(int argc, char* argv[]){
         input.get_value("y2", y2,  2.f, -100.f, 100.f, "upper Y limit");
         float width;
         input.get_value("width", width,  8.f, 0.f, 100.f, "width of the plot (inches)");
+        std::string colormap;
+        input.get_value("colormap", colormap, "inferno", "[viridis, inferno, magma, plasma, cividis, seismic, vanimo, black]");
+        std::string colorscale;
+        input.get_value("colorscale", colorscale, "log", "[linear, log]");
         bool reverse;
-        input.get_value("reverse", reverse, true, "reverse black and white?");
-        bool sdOB;
-        input.get_value("sdOB", sdOB, false, "sdOB colours?");
-
+        input.get_value("reverse", reverse, false, "[yes, no]");
+        float ncols;
+        input.get_value("ncolors", ncols, 32.f, 16.f, 239.f, "color grid resolution (< 240)");
+        
         input.save();
+
+        int ncolors = std::floor(ncols); // Force integer ncolors
+        
+        // Complain if the user provides an invalid colormap
+        if (colormap != "viridis" &&
+            colormap != "inferno" &&
+            colormap != "magma" &&
+            colormap != "plasma" &&
+            colormap != "cividis" &&
+            colormap != "vanimo" &&
+            colormap != "seismic" &&
+            colormap != "black") {
+            std::cerr << "Invalid colormap. Try one of [viridis, inferno, magma, plasma, cividis, seismic, vanimo, black]" << std::endl;
+            exit(1);
+        }
+        
+        // Complain if the user provides an invalid colorscale
+        if (colorscale != "linear" &&
+            colorscale != "log") {
+            std::cerr << "Invalid colorscale. Try one of [linear, log]" << std::endl;
+            exit(1);
+        }
+
+        // Complain if the user provides an invalid number of colors
+        if (ncolors >= 240) {
+            std::cerr << "Color grid resolution is too high. Use ncolors < 240" << std::endl;
+            exit(1);
+        }
 
         double r1, r2, rdisc1=0., rdisc2=0.;
         model.get_r1r2(r1, r2);
         double rl1 = Roche::xl11(model.q,model.spin1);
-        if(r1 <= 0) r1 = 0.99999999999*rl1;
+        
+        if(r1 <= 0){
+            r1 = 0.99999999999*rl1;
+        }
+        
         double rl2 = 1.-Roche::xl12(model.q,model.spin2);
-        if(r2 <= 0) r2 = 0.99999999999*rl2;
+        if(r2 <= 0){
+            r2 = 0.99999999999*rl2;
+        }
     
         // Generate arrays over each star's face. 
         Subs::Buffer1D<Lcurve::Point> star1, star2, disc, outer_edge, inner_edge, bspot, stream;
@@ -156,7 +250,7 @@ int main(int argc, char* argv[]){
         Lcurve::set_star_continuum(model, star1, star2);
 
         // Find the min and max flux across the entire system.
-        // TODO: Add more loops for disc and accretion spot
+        // TODO: Add more loops for disc and accretion spot.
         double min_stat=1e20, max_stat=1e-20;
         for(int i=0; i < star1.size(); i++){
             if(star1[i].flux < min_stat){min_stat = star1[i].flux;}
@@ -244,43 +338,9 @@ int main(int argc, char* argv[]){
         Subs::Plot plot(device);
 
         cpgpap(width, (y2-y1)/(x2-x1));
-
-	// set up colours. sdOB means we swap blue and red for primary and secondary
-    if(reverse){
-	    cpgscr(0,1,1,1);
-	    cpgscr(1,0,0,0);
-        if(sdOB){
-    		cpgscr(2,0,0,0.5);
-    		cpgscr(3,0,0.3,0);
-    		cpgscr(4,0.4,0,0);
-        }else{
-    		cpgscr(2,0.4,0,0);
-    		cpgscr(3,0,0.3,0);
-    		cpgscr(4,0,0,0.5);
-        }
-    }else{
-        if(sdOB){
-            cpgscr(2,0,0,1);
-            cpgscr(4,1,0,0);
-    }
-	}
         
-    // Define a normalized color gradient on an RGB scale using PGPLOT's 16 color indices: 16-31
-    int ncol = 16;   // number of colors
-    for(int i = 0; i < ncol; i++){
-        float t = i / float(ncol - 1);  // normalize 0-1
-        float r = t;                    // red contribution increases
-        float g = 0.0;                  // green contribution remains fixed
-        float b = 1.0 - t;              // blue contribution decreases
-        cpgscr(16 + i, r, g, b);        // apply RGB to PGPLOT indices 16-31
-    }
-
-    // Overwrite previous color definition with viridis
-    // define_viridis_colors();
-
-    // TODO: Build a set of preset color functions. Have user pass name + "reverse" to set colors externally.
-    // TODO: Add flag for user to set normalization by object or by system.
-
+        // User-selected colormap
+        set_colormap(colormap, reverse, ncolors);
         
         // Make stars orbit around centre of mass of system
         const Subs::Vec3 cofm(model.q/(1.+model.q),0.,0.);
@@ -290,8 +350,21 @@ int main(int argc, char* argv[]){
 
             if(nphase > 1) phase = phase1 + (phase2-phase1)*np/double(nphase-1);
 
-            cpgenv(x1, x2, y1, y2, 1, -2);
-
+            // cpgenv(x1, x2, y1, y2, 1, -2);
+            cpgpage(); // Manually start a new Postscript page, otherwise all pages get stacked into one.
+            cpgsvp(0.01, 0.99, 0.01, 0.99); // X and Y limits for the plotting area (think Python's plt.subplots_adjust(left, right, bottom, top)
+            cpgswin(x1, x2, y1, y2);    // Axis limits similar to ax.set_xlim() and ax.set_ylim()
+            // cpgbox("BCNST", 0.0, 0, "BCNST", 0.0, 0); // Similar to ax.tick_params(), but more detailed and with extra features.
+                                                      // BCNST is split into X and Y sets, which is why there are two in this line.
+                                                      //     B = show bottom(left) axis
+                                                      //     C = show top(right) axis
+                                                      //     N = Display numeric tick labels
+                                                      //     S = Display minor tick markers
+                                                      //     T = Display major tick markers
+                                                      // 2nd and 3rd arguments defined major and minor tick spacings
+                                                      //     using "0" means "auto" to let the plot determine tick spacings itself
+        
+            
             earth = Roche::set_earth(model.iangle, phase);
 
             // Compute sky basis vectors
@@ -307,27 +380,27 @@ int main(int argc, char* argv[]){
 
             // star 1
             cpgsci(4);
-            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
 
             // star 2
             cpgsci(2);
-            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
 
             if(model.add_disc){
 
                 // disc surface
                 cpgsci(3);
-                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
 
                 // edges
                 cpgsci(1);
-                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
-                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
+                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
             }
 
             if(model.add_spot){
                 cpgsci(2);
-                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat);
+                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors);
                 cpgsci(2);
                 double cosbs = Subs::dot(earth, stream[stream.size()-1].posn);
                 if(cosbs > 0. && stream[stream.size()-1].visible(phase)){
@@ -348,21 +421,33 @@ int main(int argc, char* argv[]){
 
 
 // plots visible points
-void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax){
+void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3& earth, const Subs::Vec3& cofm, const Subs::Vec3& xsky, const Subs::Vec3& ysky, double phase, double fmin, double fmax, std::string colorscale, int ncolors){
     Subs::Vec3 r;
 
-    // Find the min/max flux for the object (not for the whole system)
-    // float fmin = 1e30, fmax = -1e30;
-    // for(int i=0; i<object.size(); i++){
-    //     fmin = std::min(fmin, (float)object[i].flux);
-    //     fmax = std::max(fmax, (float)object[i].flux);
-    // }
+    bool log_scaling = false;
+    if(Subs::tolower(colorscale)=="log"){
+        log_scaling = true;
+    }
+
+    bool object_scaling=false; //  TODO, user input for "object" or "system" scaling.
+    if(object_scaling){
+        fmin = 1e30;
+        fmax = -1e30;
+        for(int i=0; i<object.size(); i++){
+            fmin = std::min<double>(fmin, object[i].flux);
+            fmax = std::max<double>(fmax, object[i].flux);
+        }
+    }
+
+    
     double log_fmin = log10(fmin + 1e-20);
     double log_fmax = log10(fmax + 1e-20);
 
-    bool log_scaling = true; // TODO: User defined color scaling (linear, log, power, square, square-root, etc)
+    int ci1, ci2;
+    cpgqcir(&ci1, &ci2);
     
-    int ncol = 16; // Number of color options hard-coded to 16 to pull from the 16 indices set earlier.
+    // Allowed up to 255 color indices with /cps (color postscript)
+    // The first 16 are saved for PGPLOT defaults, such as background color
     for(int i=0; i<object.size(); i++){
         if(Subs::dot(earth, object[i].dirn) > 0. && object[i].visible(phase)){
 
@@ -379,10 +464,10 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
             }
             norm = std::min(1.0, std::max(0.0, norm)); // Ensure normalization between 0.0 and 1.0    
             
-            int color = 16 + int(norm * (ncol - 1)); // Set the color index based on the normalization.
+            int color = 16 + int(norm * (ncolors - 1) + 0.5); // Set the color index based on the normalization.
             cpgsci(color);
             
-            // Plot one data point. Use "17" for filled circles, "1" for small points
+            // Plot one data point as a small dot.
             cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 1); 
         }
     }
