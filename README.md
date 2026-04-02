@@ -25,7 +25,7 @@ The "reverse" parameter reverses the color maps. The "colorscale" parameter allo
 
 ### 2) Starspot irradiation:
 
-The original code treats star1 as a point source for irradiation onto star2. This worked well, but meant ignoring contribution from star1's starspots. I've adjusted the source code to allow the user to enable a flag (finite_irr12) in their parameters.txt file to include contribution from all of star1's surface elements as irradiation contributors towards star2.
+The original code treats star1 as a point source for irradiation onto star2. This worked well, but meant ignoring contribution from star1's starspots. I've adjusted the source code to allow the user to enable an optional flag (finite_irr12) in their parameters.txt file to include contribution from all of star1's surface elements as irradiation contributors towards star2.
 
 This was done via a nested loop, so the runtime increases significantly when enabled (I observed a runtime increase from roughly 0.5s to 1.5s per calculation). Try to keep the stellar grid resolution parameters (nlat1c, nlat2c, nlat1f, nlat2f) low since set_star_continuum() runtime grows as $\mathcal{O}(N^2)$ with this flag enabled.
 
@@ -39,3 +39,7 @@ I've replaced the "uniform equatorial starspot" on star1 with a starspot that in
 Longitudes are considered "upstream" only within -5\*stsp1i_fwhm_long1 of the impact spot center. All other longitudes are considered "downstream" and use stsp1i_fwhm_long2 to simulate Gaussian decay with an exponential tail, allowing the smeared spot to smoothly extend nearly the full 360 degrees around the stellar surface. The animation below shows an exaggerated effect for demonstration.
 
 ![Example direct-impact accretion binary with "starspot" advection.](figures/direct_impact_advection_spot.gif)
+
+### 4) Filter curve integration
+
+I've added a new optional parameter to the parameters.txt file named "filter", which allows the software to calculate flux values by integrating across a given preset filter profile. The original lcurve behavior is to return the single-wavelength flux. Setting filter=none will revert to this behavior. Setting filter={filename} will use the filter curve provided in the file found at "/filter_curves/filename". The name is case-sensitive and must match the filename exactly, or it will throw an error.
