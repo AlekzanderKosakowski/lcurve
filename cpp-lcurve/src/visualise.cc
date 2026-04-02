@@ -258,8 +258,36 @@ int main(int argc, char* argv[]){
         Lcurve::set_star_grid(model, Roche::SECONDARY, true, star2);
 
         // Apply star continuum for coloring.
-        Lcurve::set_star_continuum(model, star1, star2);
+        ////////////////////////////////////////////////////////////////////////////
+        double temperature_grid_min = 100.0;
+        double temperature_grid_max = 100000.0;
+        double temperature_grid_step = 200.0;
+        int N_temperatures = static_cast<int>(std::ceil((temperature_grid_max - temperature_grid_min)/temperature_grid_step)) + 1;
+    
+        std::vector<double> temperature_array(N_temperatures);
+        std::vector<double> planck_array(N_temperatures);
+        for(int i=0; i < N_temperatures; ++i){
+            temperature_array[i] = temperature_grid_min + temperature_grid_step*i;
+            if (temperature_array[i] > temperature_grid_max) {
+                temperature_array[i] = temperature_grid_max;
+            }
+            planck_array[i] = 0.0;
+        }
+    
+        bool integrate_filter = !(
+                                Subs::tolower(model.filter) == "none" ||
+                                Subs::tolower(model.filter) == "false" ||
+                                Subs::tolower(model.filter) == "n" ||
+                                Subs::tolower(model.filter) == "no" ||
+                                Subs::tolower(model.filter) == "0"
+                                );
         
+        if(integrate_filter){
+            Subs::integrate_filter(temperature_array, planck_array, model.filter);
+        }
+        
+        set_star_continuum(model, star1, star2, integrate_filter, temperature_array, planck_array);
+        ////////////////////////////////////////////////////////////////////////////
         // Find the min and max temperature across the entire system.
         // Using "flux" adds an artificial gradient from equator to pole due to grid element area
         // TODO: Add more loops for disc and accretion spot.

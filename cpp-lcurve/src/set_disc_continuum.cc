@@ -20,10 +20,13 @@
 
 void Lcurve::set_disc_continuum(double rdisc, double tdisc, double texp,
 				double wave,
-				Subs::Buffer1D<Lcurve::Point>& disc){
+				Subs::Buffer1D<Lcurve::Point>& disc,
+                bool integrate_filter, const std::vector<double>& temperature_array, const std::vector<double>& planck_array){
 
     // Reference surface brightness
-    const double BRIGHT = Subs::planck(wave, tdisc);
+
+    double planck_value_disc = integrate_filter ? Subs::interp1d(temperature_array, planck_array, tdisc) : Subs::planck(wave, tdisc);
+    const double BRIGHT = planck_value_disc;
     
     for(int i=0; i<disc.size(); i++){
 	double r = disc[i].posn.length();
@@ -47,7 +50,8 @@ void Lcurve::set_disc_continuum(double rdisc, double tdisc, double texp,
 
 void Lcurve::set_edge_continuum(double tedge, double r2, double t2,
 				double absorb, double wave,
-				Subs::Buffer1D<Lcurve::Point>& edge){
+				Subs::Buffer1D<Lcurve::Point>& edge,
+                bool integrate_filter, const std::vector<double>& temperature_array, const std::vector<double>& planck_array){
 
     Subs::Vec3 vec;
     const Subs::Vec3 cofm2(1.,0.,0.);
@@ -84,7 +88,9 @@ void Lcurve::set_edge_continuum(double tedge, double r2, double t2,
             temp = tedge;
 
         }
-        edge[i].flux = edge[i].area*Subs::planck(wave, temp);
+        
+        double planck_value_disc_edge = integrate_filter ? Subs::interp1d(temperature_array, planck_array, temp) : Subs::planck(wave, temp);
+        edge[i].flux = edge[i].area * planck_value_disc_edge;
     }
 }    
 

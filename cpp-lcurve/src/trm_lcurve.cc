@@ -130,6 +130,7 @@ Lcurve::Model::Model(const std::string& file) {
     names["phase1"] = false;
     names["phase2"] = false;
     names["wavelength"] = false;
+    names["filter"] = false;
     names["roche1"] = false;
     names["roche2"] = false;
     names["eclipse1"] = false;
@@ -225,7 +226,7 @@ Lcurve::Model::Model(const std::string& file) {
             if(nit->first == "pdot" || nit->first == "third" || nit->first == "temp_edge" || nit->first == "absorb_edge"){
                 std::cerr << nit->first << " was not defined; will be set = 0" << std::endl;
                 pv[nit->first] = "0 1.e-10 1.e-10 0 0";
-            }else if(nit->first == "finite_irr12"){
+            }else if(nit->first == "finite_irr12" || nit->first == "filter"){
                 pv[nit->first] = "0";
             }else if(nit->first.substr(0,4) != "stsp" && nit->first.substr(0,6) != "stsp1i"){
                 std::cerr << nit->first << " was not defined " << std::endl;
@@ -291,47 +292,40 @@ Lcurve::Model::Model(const std::string& file) {
 
     // star-spot parameters need not have been defined, but
     // if one of a group has, then all of them should be
-    if(names["stsp11_long"] || names["stsp11_lat"] ||
-       names["stsp11_fwhm"] || names["stsp11_tcen"]){
-
-        if(!(names["stsp11_long"] && names["stsp11_lat"] &&
-             names["stsp11_fwhm"] && names["stsp11_tcen"]))
+    if(names["stsp11_long"] || names["stsp11_lat"] || names["stsp11_fwhm"] || names["stsp11_tcen"]){
+        if(!(names["stsp11_long"] && names["stsp11_lat"] && names["stsp11_fwhm"] && names["stsp11_tcen"])){
             throw Lcurve_Error("One or more of the star spot 11 parameters were not initialised");
+        }
         stsp11_long = Pparam(pv["stsp11_long"]);
         stsp11_lat  = Pparam(pv["stsp11_lat"]);
         stsp11_fwhm = Pparam(pv["stsp11_fwhm"]);
         stsp11_tcen = Pparam(pv["stsp11_tcen"]);
     }
 
-    if(names["stsp12_long"] || names["stsp12_lat"] ||
-       names["stsp12_fwhm"] || names["stsp12_tcen"]){
-
-        if(!(names["stsp12_long"] && names["stsp12_lat"] &&
-             names["stsp12_fwhm"] && names["stsp12_tcen"]))
+    if(names["stsp12_long"] || names["stsp12_lat"] || names["stsp12_fwhm"] || names["stsp12_tcen"]){
+        if(!(names["stsp12_long"] && names["stsp12_lat"] && names["stsp12_fwhm"] && names["stsp12_tcen"])){
             throw Lcurve_Error("One or more of the star spot 12 parameters were not initialised");
+        }
         stsp12_long = Pparam(pv["stsp12_long"]);
         stsp12_lat  = Pparam(pv["stsp12_lat"]);
         stsp12_fwhm = Pparam(pv["stsp12_fwhm"]);
         stsp12_tcen = Pparam(pv["stsp12_tcen"]);
     }
 
-    if(names["stsp13_long"] || names["stsp13_lat"] ||
-       names["stsp13_fwhm"] || names["stsp13_tcen"]){
-
-        if(!(names["stsp13_long"] && names["stsp13_lat"] &&
-             names["stsp13_fwhm"] && names["stsp13_tcen"]))
+    if(names["stsp13_long"] || names["stsp13_lat"] || names["stsp13_fwhm"] || names["stsp13_tcen"]){
+        if(!(names["stsp13_long"] && names["stsp13_lat"] && names["stsp13_fwhm"] && names["stsp13_tcen"])){
             throw Lcurve_Error("One or more of the star spot 13 parameters were not initialised");
+        }
         stsp13_long = Pparam(pv["stsp13_long"]);
         stsp13_lat  = Pparam(pv["stsp13_lat"]);
         stsp13_fwhm = Pparam(pv["stsp13_fwhm"]);
         stsp13_tcen = Pparam(pv["stsp13_tcen"]);
     }
 
-    if(names["stsp21_long"] || names["stsp21_lat"] ||
-       names["stsp21_fwhm"] || names["stsp21_tcen"]){
-        if(!(names["stsp21_long"] && names["stsp21_lat"] &&
-             names["stsp21_fwhm"] && names["stsp21_tcen"]))
+    if(names["stsp21_long"] || names["stsp21_lat"] || names["stsp21_fwhm"] || names["stsp21_tcen"]){
+        if(!(names["stsp21_long"] && names["stsp21_lat"] && names["stsp21_fwhm"] && names["stsp21_tcen"])){
             throw Lcurve_Error("One or more of the star spot 21 parameters were not initialised");
+        }
         stsp21_long = Pparam(pv["stsp21_long"]);
         stsp21_lat  = Pparam(pv["stsp21_lat"]);
         stsp21_fwhm = Pparam(pv["stsp21_fwhm"]);
@@ -339,8 +333,9 @@ Lcurve::Model::Model(const std::string& file) {
     }
 
     if(names["stsp22_long"] || names["stsp22_lat"] || names["stsp22_fwhm"] || names["stsp22_tcen"]){
-        if(!(names["stsp22_long"] && names["stsp22_lat"] && names["stsp22_fwhm"] && names["stsp22_tcen"]))
+        if(!(names["stsp22_long"] && names["stsp22_lat"] && names["stsp22_fwhm"] && names["stsp22_tcen"])){
             throw Lcurve_Error("One or more of the star spot 22 parameters were not initialised");
+        }
         stsp22_long = Pparam(pv["stsp22_long"]);
         stsp22_lat  = Pparam(pv["stsp22_lat"]);
         stsp22_fwhm = Pparam(pv["stsp22_fwhm"]);
@@ -348,8 +343,9 @@ Lcurve::Model::Model(const std::string& file) {
     }
 	
     if(names["stsp1i_fwhm_long1"] || names["stsp1i_fwhm_long2"] || names["stsp1i_fwhm_lat"] || names["stsp1i_long"] || names["stsp1i_lat"] || names["stsp1i_tcen"]){
-        if(!(names["stsp1i_fwhm_long1"] && names["stsp1i_fwhm_long2"] && names["stsp1i_fwhm_lat"] && names["stsp1i_long"] && names["stsp1i_lat"] && names["stsp1i_tcen"]))
-	throw Lcurve_Error("One or more of impact star spot parameters were not initialised");
+        if(!(names["stsp1i_fwhm_long1"] && names["stsp1i_fwhm_long2"] && names["stsp1i_fwhm_lat"] && names["stsp1i_long"] && names["stsp1i_lat"] && names["stsp1i_tcen"])){
+        	throw Lcurve_Error("One or more of impact star spot parameters were not initialised");
+        }
         stsp1i_fwhm_long1 = Pparam(pv["stsp1i_fwhm_long1"]);
         stsp1i_fwhm_long2 = Pparam(pv["stsp1i_fwhm_long2"]);
         stsp1i_fwhm_lat = Pparam(pv["stsp1i_fwhm_lat"]);
@@ -373,14 +369,16 @@ Lcurve::Model::Model(const std::string& file) {
     phase1 = Subs::string_to_double(pv["phase1"]);
     phase2 = Subs::string_to_double(pv["phase2"]);
     wavelength = Subs::string_to_double(pv["wavelength"]);
-
+    filter = pv["filter"];
+    
     roche1 = Subs::string_to_bool(pv["roche1"]);
     roche2 = Subs::string_to_bool(pv["roche2"]);
     eclipse1 = Subs::string_to_bool(pv["eclipse1"]);
     eclipse2 = Subs::string_to_bool(pv["eclipse2"]);
     glens1 = Subs::string_to_bool(pv["glens1"]);
-    if(glens1 && roche1)
-      throw Lcurve_Error("For reasons of simplicity, glens1 = 1 and roche1 = 1 are not simultaneously allowed");
+    if(glens1 && roche1){
+        throw Lcurve_Error("For reasons of simplicity, glens1 = 1 and roche1 = 1 are not simultaneously allowed");
+    }
     use_radii        = Subs::string_to_bool(pv["use_radii"]);
     tperiod          = Subs::string_to_double(pv["tperiod"]);
     gdark_bolom1     = Subs::string_to_bool(pv["gdark_bolom1"]);
@@ -393,16 +391,14 @@ Lcurve::Model::Model(const std::string& file) {
     }else if(pv["limb1"] == "Claret"){
         limb1 = LDC::CLARET;
     }else{
-        throw Lcurve_Error("Could not recognize the value of limb1 = " +
-                           pv["limb1"] + "; should be 'Poly' or 'Claret'");
+        throw Lcurve_Error("Could not recognize the value of limb1 = " + pv["limb1"] + "; should be 'Poly' or 'Claret'");
     }
     if(pv["limb2"] == "Poly"){
         limb2 = LDC::POLY;
     }else if(pv["limb2"] == "Claret"){
         limb2 = LDC::CLARET;
     }else{
-        throw Lcurve_Error("Could not recognize the value of limb2 = " +
-                           pv["limb2"] + "; should be 'Poly' or 'Claret'");
+        throw Lcurve_Error("Could not recognize the value of limb2 = " + pv["limb2"] + "; should be 'Poly' or 'Claret'");
     }
 
     mirror           = Subs::string_to_bool(pv["mirror"]);
@@ -1741,6 +1737,7 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "phase2         = " << model.phase2         << "\n";
 
     s << "wavelength     = " << model.wavelength     << "\n";
+    s << "filter         = " << model.filter         << "\n";
     s << "roche1         = " << model.roche1         << "\n";
     s << "roche2         = " << model.roche2         << "\n";
     s << "eclipse1       = " << model.eclipse1       << "\n";

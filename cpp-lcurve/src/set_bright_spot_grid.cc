@@ -24,7 +24,11 @@
  * \exception Exceptions are thrown if the specified radii over-fill the Roche lobes.
  */
 
-void Lcurve::set_bright_spot_grid(const Model& mdl, Subs::Buffer1D<Lcurve::Point>& spot){
+void Lcurve::set_bright_spot_grid(const Model& mdl,
+                                Subs::Buffer1D<Lcurve::Point>& spot,
+                                bool integrate_filter,
+                                const std::vector<double>& temperature_array,
+                                const std::vector<double>& planck_array){
 
     double r1, r2;
     mdl.get_r1r2(r1, r2);
@@ -73,8 +77,10 @@ void Lcurve::set_bright_spot_grid(const Model& mdl, Subs::Buffer1D<Lcurve::Point
 
     // This is where the spot height gets in
     const double AREA   = SFAC*mdl.length_spot*mdl.height_spot/(mdl.nspot-1);
-    const double BRIGHT = Subs::planck(mdl.wavelength, mdl.temp_spot);
 
+    double planck_value_spot = integrate_filter ? Subs::interp1d(temperature_array, planck_array, mdl.temp_spot) : Subs::planck(mdl.wavelength, mdl.temp_spot);
+    const double BRIGHT = planck_value_spot;
+    
     for(int i=0; i<mdl.nspot; i++){
 
         // Position is adjusted to locate the impact point at the peak temperature point

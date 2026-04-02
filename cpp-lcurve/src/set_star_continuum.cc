@@ -26,7 +26,9 @@
 
 void Lcurve::set_star_continuum(const Model& mdl,
                                 Subs::Buffer1D<Lcurve::Point>& star1,
-                                Subs::Buffer1D<Lcurve::Point>& star2){
+                                Subs::Buffer1D<Lcurve::Point>& star2, bool integrate_filter,
+                                const std::vector<double>& temperature_array,
+                                const std::vector<double>& planck_array){
 
     double r1, r2;
     mdl.get_r1r2(r1, r2);
@@ -195,14 +197,15 @@ void Lcurve::set_star_continuum(const Model& mdl,
             geom = 0.;
             temp = t1*pow(double(star1[i].gravity),GDCBOL1);
         }
-
+        
+        double planck_value1 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, temp) : Subs::planck(mdl.wavelength, temp);
+        double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, Subs::abs(double(mdl.t2))) : Subs::planck(mdl.wavelength, Subs::abs(double(mdl.t2)));
+        
+        star1[i].flux = star1[i].area * planck_value1;
         star1[i].temp = temp;
             
-        // At this stage also add in a directly reflected part too
-        star1[i].flux  = star1[i].area*Subs::planck(mdl.wavelength, temp);
-
         if(mdl.mirror){
-            star1[i].flux  += star1[i].area*geom*Subs::planck(mdl.wavelength, Subs::abs(double(mdl.t2)));
+            star1[i].flux += star1[i].area * geom * planck_value2;
         }
     }
 
@@ -250,12 +253,12 @@ void Lcurve::set_star_continuum(const Model& mdl,
         double t2 = Subs::abs(double(mdl.t2));
 
         // Increase temperature based on starspot parameters.
-        if(is_spot21){
+        if(is_spot21 && mdl.stsp21_fwhm > 0){
             Subs::Vec3 off = star2[i].posn-cofm2;
             double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot21)/off.length()));
             t2 += (mdl.stsp21_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
         }
-    	if(is_spot22){
+    	if(is_spot22 && mdl.stsp22_fwhm > 0){
             Subs::Vec3 off = star2[i].posn-cofm2;
             double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot22)/off.length()));
             t2 += (mdl.stsp22_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp22_fwhm/Constants::EFAC))/2.);
@@ -264,7 +267,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
         if(mdl.finite_irr12 && mdl.absorb > 0){ // Use finite surface elements from star1 to irradiate star2.
                                                 // Allows the donor to be irradiated by starspots on the surface of the accretor (think direct-impact accretion).
         
-            // Adjust temperature based on gravity darkening
+            // Adjust temperature based on local gravity darkening
             double T_intrinsic = t2 * pow(double(star2[i].gravity), GDCBOL2);
     
             // Begin loop over star1's elements for precise irradiations
@@ -287,18 +290,24 @@ void Lcurve::set_star_continuum(const Model& mdl,
                     double geom_factor = mu1 * mu2 * star1[j].area / (r12*r12);
         
                     // Add to irradiation flux (absorbed fraction)
-                    F_irradiation += mdl.absorb * pow(star1[j].temp, 4) * geom_factor;
+                    F_irradiation += mdl.absorb * pow(star1[j].temp, 4) * geom_factor; //star1[j].temp already accounts for its gravity darkening
                 }
             }
 
-            // Total effective temperature including irradiation
+            // Total effective temperature including irradiation, which is thermalized and re-emitted locally.
             double T_eff = pow(pow(T_intrinsic, 4) + F_irradiation, 0.25);
-            // std::cout << i << "/" << nelem2 << " " << T_intrinsic << " " << F_irradiation << " " << T_eff << std::endl;
+
+            double planck_value1 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, mdl.t1) : Subs::planck(mdl.wavelength, mdl.t1);
+            double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T_eff) : Subs::planck(mdl.wavelength, T_eff);
+
+            star2[i].flux = star2[i].area * planck_value2;
             star2[i].temp = T_eff;
                 
-            // Compute monochromatic flux for this element
-            star2[i].flux = star2[i].area * Subs::planck(mdl.wavelength, T_eff);
+            if(mdl.mirror){
+                star2[i].flux += star2[i].area*geom * planck_value1;
+            }
 
+                        
         }else{ // Original behavior: treat star1 as a point source without starspots
 
             vec = cofm1 - star2[i].posn;
@@ -308,13 +317,10 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // compute unirradiated temperature allowing for
             // offset from spot centre
             double t2 = Subs::abs(double(mdl.t2));
-            if(is_spot21){
+            if(is_spot21 && mdl.stsp21_fwhm > 0){
                 Subs::Vec3 off = star2[i].posn-cofm2;
-                double dist =
-                    Subs::rad2deg(std::acos(Subs::dot(off, spot21)/
-                                            off.length()));
-                t2 += (mdl.stsp21_tcen-t2)*
-                    std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
+                double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot21)/off.length()));
+                t2 += (mdl.stsp21_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
             }
     
             if(mu >= r1){
@@ -330,11 +336,15 @@ void Lcurve::set_star_continuum(const Model& mdl,
                 geom = 0.;
                 temp = t2*pow(double(star2[i].gravity), GDCBOL2);
             }
-    
-            star2[i].flux = star2[i].area*Subs::planck(mdl.wavelength, temp);
-    
+
+            double planck_value1 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, mdl.t1) : Subs::planck(mdl.wavelength, mdl.t1);
+            double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, temp) : Subs::planck(mdl.wavelength, temp);
+
+            star2[i].flux = star2[i].area * planck_value2;
+            star2[i].temp = temp;
+            
             if(mdl.mirror){
-                star2[i].flux += star2[i].area*geom*Subs::planck(mdl.wavelength, mdl.t1);
+                star2[i].flux += star2[i].area * geom * planck_value1;
             }
         }        
     }

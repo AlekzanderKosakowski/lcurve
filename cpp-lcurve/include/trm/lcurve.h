@@ -558,6 +558,9 @@ namespace Lcurve {
     //! Wavelength
     double wavelength;
 
+    //! Filter curve filename (or "none")
+    std::string filter;
+
     //! Account for Roche distortion of primary
     bool roche1;
 
@@ -762,7 +765,8 @@ namespace Lcurve {
   void set_disc_grid(const Model& mdl, Subs::Buffer1D<Lcurve::Point>& disc);
 
   //! Bright spot elelemts
-  void set_bright_spot_grid(const Model& mdl, Subs::Buffer1D<Lcurve::Point>& spot);
+  void set_bright_spot_grid(const Model& mdl, Subs::Buffer1D<Lcurve::Point>& spot,
+                            bool integrate_filter, const std::vector<double>& temperature_array, const std::vector<double>& planck_array);
   
   //! Computes elements at rim of disc
   void set_disc_edge(const Model& mdl, bool outer,
@@ -772,16 +776,21 @@ namespace Lcurve {
   //! Sets the continuum element contributions
   void set_star_continuum(const Model& mdl,
                           Subs::Buffer1D<Lcurve::Point>& star1,
-                          Subs::Buffer1D<Lcurve::Point>& star2);
+                          Subs::Buffer1D<Lcurve::Point>& star2,
+                          bool integrate_filter,
+                          const std::vector<double>& temperature_array,
+                          const std::vector<double>& planck_array);
 
   //! Sets the disc continuum brightness.
   void set_disc_continuum(double rdisc, double tdisc, double texp,
-                          double wave, Subs::Buffer1D<Lcurve::Point>& disc);
+                          double wave, Subs::Buffer1D<Lcurve::Point>& disc,
+                          bool integrate_filter, const std::vector<double>& temperature_array, const std::vector<double>& planck_array);
 
   //! Sets the disc edge continuum brightness.
   void set_edge_continuum(double tedge, double r2, double t2,
                           double absorb, double wave,
-                          Subs::Buffer1D<Lcurve::Point>& edge);
+                          Subs::Buffer1D<Lcurve::Point>& edge,
+                          bool integrate_filter, const std::vector<double>& temperature_array, const std::vector<double>& planck_array);
 
   //! Sets the emission line brightness
   void set_star_emission(double limb2, double hbyr,

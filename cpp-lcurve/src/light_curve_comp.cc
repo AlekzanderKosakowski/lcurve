@@ -65,7 +65,37 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
   set_star_grid(mdl, Roche::SECONDARY, true, star2f);
   if(info) std::cerr << "Number of points for star 2 (fine) = " << star2f.size() << std::endl;
 
-  set_star_continuum(mdl, star1f, star2f);
+
+    // Prepare filter curve integration
+    double temperature_grid_min = 100.0;
+    double temperature_grid_max = 100000.0;
+    double temperature_grid_step = 200.0;
+    int N_temperatures = static_cast<int>(std::ceil((temperature_grid_max - temperature_grid_min)/temperature_grid_step)) + 1;
+
+    std::vector<double> temperature_array(N_temperatures);
+    std::vector<double> planck_array(N_temperatures);
+    for(int i=0; i < N_temperatures; ++i){
+        temperature_array[i] = temperature_grid_min + temperature_grid_step*i;
+        if (temperature_array[i] > temperature_grid_max) {
+            temperature_array[i] = temperature_grid_max;
+        }
+        planck_array[i] = 0.0;
+    }
+
+    
+    
+    bool integrate_filter = !(
+                        Subs::tolower(mdl.filter) == "none" ||
+                        Subs::tolower(mdl.filter) == "false" ||
+                        Subs::tolower(mdl.filter) == "n" ||
+                        Subs::tolower(mdl.filter) == "no" ||
+                        Subs::tolower(mdl.filter) == "0"
+                        );
+    if(integrate_filter){
+        Subs::integrate_filter(temperature_array, planck_array, mdl.filter);
+    }
+    
+  set_star_continuum(mdl, star1f, star2f, integrate_filter, temperature_array, planck_array);
 
   // Now coarse grids
   Subs::Buffer1D<Point> star1c;
@@ -90,7 +120,7 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
                      << star2c.size() << std::endl;
 
   if(mdl.nlat1c != mdl.nlat1f || !copy2)
-      set_star_continuum(mdl, star1c, star2c);
+      set_star_continuum(mdl, star1c, star2c, integrate_filter, temperature_array, planck_array);
 
   // Work out grid switching parameters
   Ginterp gint;
@@ -189,17 +219,19 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
 
       // Set the surface brightness of the disc
       set_disc_continuum(rdisc2, mdl.temp_disc, mdl.texp_disc,
-                         mdl.wavelength, disc);
+                         mdl.wavelength, disc,
+                         integrate_filter, temperature_array, planck_array);
 
       // Set the surface brightness of outer edge, accounting for
       // irradiation by star 2
       set_edge_continuum(mdl.temp_edge, r2, std::abs(mdl.t2),
-                         mdl.absorb_edge, mdl.wavelength, edge);
+                         mdl.absorb_edge, mdl.wavelength, edge,
+                         integrate_filter, temperature_array, planck_array);
 
   }
 
   // This could raise an exception for bad parameters.
-  if(mdl.add_spot) Lcurve::set_bright_spot_grid(mdl, spot);
+  if(mdl.add_spot) Lcurve::set_bright_spot_grid(mdl, spot, integrate_filter, temperature_array, planck_array);
 
   // polynomial fudge factor stuff: slope, quad, cube
   double xmin = data[0].time, xmax = data[0].time;

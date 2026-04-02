@@ -857,7 +857,7 @@ namespace Subs {
      * \return The y value equivalent to x
      */
     inline double linterp(double x1, double y1, double x2, double y2, double x){
-	return (y1*(x2-x)+y2*(x-x1))/(x2-x1);
+    	return (y1*(x2-x)+y2*(x-x1))/(x2-x1);
     }
 
     //! locate a value in an ordered list
@@ -1514,6 +1514,16 @@ namespace Subs {
 
     //! Logarithmic derivative of Planck function Bnu wrt T
     double dlpdlt(double wave, double temp);
+
+    //! Function to integrate a filter profile
+    void integrate_filter(const std::vector<double>& temperature_array, std::vector<double>& planck_array, std::string filter);
+
+
+    //! C++ equivalent to python's scipy.interpolate.interp1d for linear interpolation.
+    //! Input 1D x_grid, y_grid and an x value -> return the corresponding interpolated y-value.
+    //! Function found in planck.cc
+    double interp1d(const std::vector<double>& x_grid, const std::vector<double>& y_grid, double x);
+
 
     //! Abstract class for Runge-Kutta integration
     /** This class is the base class for usage by the Runge-Kutta integration routines
