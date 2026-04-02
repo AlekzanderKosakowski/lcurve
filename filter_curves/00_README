@@ -1,0 +1,21 @@
+Filter transmission curves in two-column, space-delimited format with no header line.
+
+Columns must be
+  1) Wavelength (nanometers)
+  2) Filter transmission coefficient
+
+
+A published collection of filter curve is available on the SVO filter profile webpage (confirm their wavelength units):
+    https://svo2.cab.inta-csic.es/theory/fps/
+
+How they're used:
+
+    When the user defines the "filter" variable in their parameters.txt file using the exact same name as the filenames here,
+      the light curve building code will convert all wavelengths in these files into Blackbody fluxes using the Subs::planck() function,
+      then apply a weighted mean using the transmission coefficients to obtain an effective blackbody flux for the filter in use,
+      then finally interpolate these blackbody fluxes along a temperature grid defined in the cpp-lcurve/src/light_curve_comp.cc file.
+    This returns a single filter-integrated blackbody flux instead of a single-wavelength blackbody flux.
+      
+      
+    To use the sdss_gprime.txt filter curve, you must specify "filter=sdss_gprime" in your parameters.txt file.
+    If you do not wish to use integrated flux, then you should set "filter=none"
