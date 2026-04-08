@@ -876,7 +876,7 @@ namespace Lcurve {
                         bool scale, bool rdata, bool info, Subs::Buffer1D<double>& sfac,
                         Subs::Array1D<double>& calc, double& wdwarf,
                         double& chisq, double& wnok,
-                        double& logg1, double& logg2, double& rv1, double& rv2);
+                        double& logg1, double& logg2, double& rv1, double& rv2, double& ffac1, double& ffac2);
 
   //! Re-scales a fit to minimise chi**2
   double re_scale(const Lcurve::Data& data, Subs::Array1D<double>& fit,

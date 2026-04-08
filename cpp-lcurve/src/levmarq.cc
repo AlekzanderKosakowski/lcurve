@@ -123,8 +123,11 @@ Subs::Buffer1D<double> Lmfunc::scale_min;
 
 // Main program
 int main(int argc, char* argv[]){
-
     try{
+
+    std::cout << "levmaq.cc recompiled on "
+              << __DATE__ << " at "
+              << __TIME__ << std::endl;
 
 	// Construct Input object
 	Subs::Input input(argc, argv, Lcurve::LCURVE_ENV, Lcurve::LCURVE_DIR);
@@ -267,10 +270,10 @@ void Lmfunc::lmcomp(Subs::Buffer2D<double>& alpha, Subs::Buffer1D<double>& beta,
     // Compute the fit
     Subs::Buffer1D<double> sfac(4), tsfac(4);
     Subs::Array1D<double> fit;
-    double wdwarf, wnok, logg1, logg2, rv1, rv2;
+    double wdwarf, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2;
 
     Lcurve::light_curve_comp(model, data, true, true, false, sfac, fit, wdwarf,
-                             chisq, wnok, logg1, logg2, rv1, rv2);
+                             chisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2);
     if(wnok == 0.0)
         throw Lcurve::Lcurve_Error("void Lmfunc::lmcomp: no good data!");
     Lmfunc::neval++;
@@ -287,7 +290,7 @@ void Lmfunc::lmcomp(Subs::Buffer2D<double>& alpha, Subs::Buffer1D<double>& beta,
         tparam[i] += dstep[i];
         model.set_param(tparam);
         Lcurve::light_curve_comp(model, data, true, true, false, tsfac, deriv[i],
-                                 wdwarf, tchisq, wnok, logg1, logg2, rv1, rv2);
+                                 wdwarf, tchisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2);
         Lmfunc::neval++;
 
         // Next four lines are an attempt to reduce round-off error
@@ -299,7 +302,7 @@ void Lmfunc::lmcomp(Subs::Buffer2D<double>& alpha, Subs::Buffer1D<double>& beta,
 
         model.set_param(tparam);
         Lcurve::light_curve_comp(model, data, true, true, false, tsfac, buff,
-                                 wdwarf, tchisq, wnok, logg1, logg2, rv1, rv2);
+                                 wdwarf, tchisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2);
         Lmfunc::neval++;
 
         deriv[i] -= buff;

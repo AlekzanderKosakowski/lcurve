@@ -362,6 +362,10 @@ Subs::Buffer1D<double> Lcurve::Fobj::scale_min;
 int main(int argc, char* argv[]){
 
     try{
+       std::cout << "lroche.cc recompiled on "
+                 << __DATE__ << " at "
+                 << __TIME__ << std::endl;
+
 
         // Construct Input object
         Subs::Input input(argc, argv, Lcurve::LCURVE_ENV, Lcurve::LCURVE_DIR);
@@ -471,10 +475,10 @@ int main(int argc, char* argv[]){
 
         // Compute light curve
         Subs::Array1D<double> fit;
-        double wdwarf, chisq, wnok, logg1, logg2, rv1, rv2;
+        double wdwarf, chisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2;
         Lcurve::light_curve_comp(model, data, scale, !no_file, true, sfac,
                                  fit, wdwarf, chisq, wnok,
-                                 logg1, logg2, rv1, rv2);
+                                 logg1, logg2, rv1, rv2, ffac1, ffac2);
 
         Subs::Format form(12);
 
@@ -502,6 +506,8 @@ int main(int argc, char* argv[]){
         std::cout << "log10(g2 [cgs]) = " << form(logg2) << std::endl;
         std::cout << "Vol-averaged r1 = " << form(rv1) << std::endl;
         std::cout << "Vol-averaged r2 = " << form(rv2) << std::endl;
+        std::cout << "ffac1 (r1/r1L1) = " << form(ffac1) << std::endl;
+        std::cout << "ffac2 (r2/r2L1) = " << form(ffac2) << std::endl;
 
         if(!no_file){
             // Scale error bars

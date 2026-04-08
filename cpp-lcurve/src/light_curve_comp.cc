@@ -31,19 +31,24 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
                               Subs::Buffer1D<double>& sfac,
                               Subs::Array1D<double>& calc, double& wdwarf,
                               double& chisq, double& wnok,
-                              double& logg1, double& logg2, double& rv1, double& rv2){
+                              double& logg1, double& logg2, double& rv1, double& rv2, double& ffac1, double& ffac2){
 
   // Get the size right
   calc.resize(data.size());
 
   double r1, r2;
   mdl.get_r1r2(r1, r2);
-  double rl2 = 1.- Roche::xl12(mdl.q, mdl.spin2);
-  if(r2 < 0)
+  double rl1 = Roche::xl12(mdl.q, mdl.spin2); // Distance from center of star1 to the L1 location
+  double rl2 = 1.0 - rl1; // Distance from the center of star2 to the L1 location
+  ffac1 = r1/rl1;
+  ffac2 = r2/rl2;
+    
+  if(r2 < 0){
       r2 = rl2;
-  else if(r2 > rl2)
+      ffac2 = 1.0;
+  }else{if(r2 > rl2)
       throw Lcurve_Error("light_curve_comp: the secondary star is larger than its Roche lobe!");
-
+  }
   LDC ldc1 = mdl.get_ldc1();
   LDC ldc2 = mdl.get_ldc2();
 
