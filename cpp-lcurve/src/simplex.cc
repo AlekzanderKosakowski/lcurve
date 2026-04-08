@@ -62,8 +62,11 @@ using Subs::operator+;
 
 // Main program
 int main(int argc, char* argv[]){
-  
+
   try{
+      std::cout << "simplex.cc recompiled on "
+                << __DATE__ << " at "
+                << __TIME__ << std::endl;
 
     // Construct Input object
     Subs::Input input(argc, argv, Lcurve::LCURVE_ENV, Lcurve::LCURVE_DIR);
