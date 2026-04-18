@@ -198,17 +198,30 @@ namespace Lcurve {
 
   //! Lim darkening class
   class LDC {
-
   public:
 
     enum LDCtype {POLY, CLARET};
 
     //! Default. Sets all to zero.
-    LDC() : ldc1(0.), ldc2(0.), ldc3(0.), ldc4(0.), mucrit(0.), ltype(POLY) {}
+    LDC() : ldc1(0.), ldc2(0.), ldc3(0.), ldc4(0.), mucrit(0.), ltype(POLY), norm(1.0) {}
 
     //! Standard constructor
     LDC(double ldc1, double ldc2, double ldc3, double ldc4, double mucrit, LDCtype ltype) :
-      ldc1(ldc1), ldc2(ldc2), ldc3(ldc3), ldc4(ldc4), mucrit(mucrit), ltype(ltype) {}
+      ldc1(ldc1), ldc2(ldc2), ldc3(ldc3), ldc4(ldc4), mucrit(mucrit), ltype(ltype), norm(1.0) { // Start __init__() equivalent
+
+        if(false){
+            // ====== Check normalization for flux conservation. ======
+            double sum = 0.0;
+            int N = 5000;
+            for(int i = 0; i < N; i++){
+                double mu = (i + 0.5) / N;
+                sum += imu(mu) * mu;
+            }
+            norm = 2.0 * sum / N;
+            std::cout << "LDC Normalization value = " << norm << std::endl;
+            // ====== = ======
+        }
+      }
 
     //! Computes I(mu)
     double imu(double mu) const {
@@ -239,6 +252,7 @@ namespace Lcurve {
     double  ldc4;
     double  mucrit;
     LDCtype ltype;
+    double norm;
 
   };
 
@@ -779,7 +793,8 @@ namespace Lcurve {
                           Subs::Buffer1D<Lcurve::Point>& star2,
                           bool integrate_filter,
                           const std::vector<double>& temperature_array,
-                          const std::vector<double>& planck_array);
+                          const std::vector<double>& planck_array,
+                          const LDC& ldc1, const LDC& ldc2);
 
   //! Sets the disc continuum brightness.
   void set_disc_continuum(double rdisc, double tdisc, double texp,
