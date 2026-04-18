@@ -28,7 +28,9 @@ void Lcurve::set_star_continuum(const Model& mdl,
                                 Subs::Buffer1D<Lcurve::Point>& star1,
                                 Subs::Buffer1D<Lcurve::Point>& star2, bool integrate_filter,
                                 const std::vector<double>& temperature_array,
-                                const std::vector<double>& planck_array){
+                                const std::vector<double>& planck_array,
+                                const LDC& ldc1, const LDC& ldc2
+                                ){
 
     double r1, r2;
     mdl.get_r1r2(r1, r2);
@@ -54,23 +56,15 @@ void Lcurve::set_star_continuum(const Model& mdl,
     // then calculating the flux in a BB approx. The 'bolometric' method does
     // this directly; the 'filter integrated' method modifies the exponent
     // used to give the desired behaviour of flux with gravity.
-    const double GDCBOL1 = mdl.gdark_bolom1 ? mdl.gravity_dark1 :
-        mdl.gravity_dark1 / Subs::dlpdlt(mdl.wavelength, mdl.t1);
-
-    int nelem1 = star1.size();
-
+    const double GDCBOL1 = mdl.gdark_bolom1 ? mdl.gravity_dark1 : mdl.gravity_dark1 / Subs::dlpdlt(mdl.wavelength, mdl.t1);
+    
     // compute direction of star spot 11, 12, 13, and the direct impact starspot (stsp1i)
     Subs::Vec3 spot11, spot12, spot13, spot1i;
-    bool is_spot11 = mdl.stsp11_long.defined && mdl.stsp11_lat.defined &&
-        mdl.stsp11_fwhm.defined && mdl.stsp11_tcen.defined;
-    bool is_spot12 = mdl.stsp12_long.defined && mdl.stsp12_lat.defined &&
-      mdl.stsp12_fwhm.defined && mdl.stsp12_tcen.defined;
-    bool is_spot13 = mdl.stsp13_long.defined && mdl.stsp13_lat.defined &&
-        mdl.stsp13_fwhm.defined && mdl.stsp13_tcen.defined;
+    bool is_spot11 = mdl.stsp11_long.defined && mdl.stsp11_lat.defined && mdl.stsp11_fwhm.defined && mdl.stsp11_tcen.defined;
+    bool is_spot12 = mdl.stsp12_long.defined && mdl.stsp12_lat.defined && mdl.stsp12_fwhm.defined && mdl.stsp12_tcen.defined;
+    bool is_spot13 = mdl.stsp13_long.defined && mdl.stsp13_lat.defined && mdl.stsp13_fwhm.defined && mdl.stsp13_tcen.defined;
     
-    bool is_spot1i = mdl.stsp1i_long.defined && mdl.stsp1i_lat.defined &&
-                    mdl.stsp1i_fwhm_lat.defined && mdl.stsp1i_fwhm_long1.defined && mdl.stsp1i_fwhm_long2.defined &&
-                    mdl.stsp1i_tcen.defined;
+    bool is_spot1i = mdl.stsp1i_long.defined && mdl.stsp1i_lat.defined && mdl.stsp1i_fwhm_lat.defined && mdl.stsp1i_fwhm_long1.defined && mdl.stsp1i_fwhm_long2.defined && mdl.stsp1i_tcen.defined;
     
     double clong11=0., slong11=0., clat11=0., slat11=0.;
     double clong12=0., slong12=0., clat12=0., slat12=0.;
@@ -109,8 +103,9 @@ void Lcurve::set_star_continuum(const Model& mdl,
     }
 
     // Build star1 grid details
+    int nelem1 = star1.size();
     for(int i=0; i<nelem1; i++){
-        vec = cofm2 - star1[i].posn;
+        vec = cofm2 - star1[i].posn; // Points from star1 surface element towards center of star2
         r = vec.length();
         mu = Subs::dot(star1[i].dirn, vec)/r;
 
@@ -118,15 +113,15 @@ void Lcurve::set_star_continuum(const Model& mdl,
         double t1 = mdl.t1;
 
         // Adjust temperature from Gaussian spots based on angular distance from center.
-        if(is_spot11){
+        if(is_spot11 && mdl.stsp11_fwhm > 0){
         	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot11)/star1[i].posn.length()));
         	t1 += (mdl.stsp11_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp11_fwhm/Constants::EFAC))/2.);
         }
-    	if(is_spot12){
+    	if(is_spot12 && mdl.stsp12_fwhm > 0){
         	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot12)/star1[i].posn.length()));
             t1 += (mdl.stsp12_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp12_fwhm/Constants::EFAC))/2.);
         }
-    	if(is_spot13){
+    	if(is_spot13 && mdl.stsp13_fwhm > 0){
         	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot13)/star1[i].posn.length()));
     	    t1 += (mdl.stsp13_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp13_fwhm/Constants::EFAC))/2.);
         }
@@ -134,28 +129,28 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // Direct-impact starspot with approximate advective tail in the spin direction.
             
             // Latitude and longitudes all in radians here for trig calculations.
-            double surface_longitude = std::atan2(star1[i].posn.y(), star1[i].posn.x());
+            double surface_longitude = std::atan2(star1[i].posn.y(), star1[i].posn.x()); // longitude of surface element
             double surface_latitude = std::asin(star1[i].posn.z() / star1[i].posn.length());
             
-            double impact_longitude = Subs::deg2rad(mdl.stsp1i_long);
+            double impact_longitude = Subs::deg2rad(mdl.stsp1i_long); // longitude of direct-impact spot center
             double impact_latitude = Subs::deg2rad(mdl.stsp1i_lat);
 
-            double fwhm_upstream   = Subs::deg2rad(mdl.stsp1i_fwhm_long1);
-            double fwhm_downstream = Subs::deg2rad(mdl.stsp1i_fwhm_long2);
-            double fwhm_latitude   = Subs::deg2rad(mdl.stsp1i_fwhm_lat);
-            
+            double fwhm_upstream   = Subs::deg2rad(mdl.stsp1i_fwhm_long1); // Gaussian decay of impact spot in longitude direction
+            double fwhm_downstream = Subs::deg2rad(mdl.stsp1i_fwhm_long2); // Exponential decay of advection tail
+            double fwhm_latitude   = Subs::deg2rad(mdl.stsp1i_fwhm_lat);   // Gaussian decay of impact spot in latitude direction
             
             // Latitude calculations
             double latitude_offset = Subs::abs(impact_latitude - surface_latitude);
             double latitude_decay_term = std::exp(-Subs::sqr(latitude_offset/(fwhm_latitude/Constants::EFAC))/2.);
 
-
             // Longitude calculations
             double delta_phi = surface_longitude - impact_longitude; // Raw difference in longitude (radians). Positive means surface element is downstream from impact center
-            delta_phi = std::fmod(delta_phi + Constants::PI, 2.0*Constants::PI) - Constants::PI;
-            double delta_phi_phys = delta_phi * (1+0*std::cos(surface_latitude)); // Apply spherical correction to fix decay at high latitudes (energy transport stuff)
+            delta_phi = std::fmod(delta_phi + Constants::PI, 2.0*Constants::PI) - Constants::PI; // Enable decay over the full longitude circumference.
 
-            double upstream_limit = -5.0 * fwhm_upstream / Constants::EFAC; // Hard cutoff at 5 sigma for "upstream" direction limits.
+            bool spherical_correction = false; // Apply spherical correction to "fix" decay at high latitudes? (energy transport stuff?)
+            double delta_phi_phys = spherical_correction ? delta_phi * std::cos(surface_latitude) : delta_phi;
+            
+            double upstream_limit = -5.0 * fwhm_upstream / Constants::EFAC; // Hard cutoff at 5 sigma for "upstream" direction limits. All other longitudes are "downstream"
             bool upstream = (delta_phi_phys >= upstream_limit) && (delta_phi_phys <= 0.0);
 
             double longitude_decay_term;
@@ -166,7 +161,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
                 if(delta_phi_downstream < 0.0){
                     delta_phi_downstream += 2.0*Constants::PI;
                 }
-                double delta_phi_downstream_phys = delta_phi_downstream * (1+0*std::cos(surface_latitude));
+                double delta_phi_downstream_phys = spherical_correction ? delta_phi_downstream*std::cos(surface_latitude) : delta_phi_downstream;
                 
                 double fraction_core = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_upstream/Constants::EFAC))/2.);
                 double fraction_tail = std::exp(-delta_phi_downstream_phys/fwhm_downstream) * (1.0 - fraction_core);
@@ -174,9 +169,6 @@ void Lcurve::set_star_continuum(const Model& mdl,
             }
             t1 += (mdl.stsp1i_tcen - mdl.t1) * longitude_decay_term * latitude_decay_term;                
         }
-
-
-
         
         // Irradiation handled by treating star2 as a point source with no starspots.
         if(mu >= r2){
@@ -208,22 +200,24 @@ void Lcurve::set_star_continuum(const Model& mdl,
             star1[i].flux += star1[i].area * geom * planck_value2;
         }
     }
+    // First-iteration star1 surface elements have been computed.
+
+
+    // ==============================
+    // |  Begin star2 calculations  |
+    // ==============================
 
     const Subs::Vec3 cofm1(0.,0.,0.);
 
     // See comments on GDCBOL1
-    const double GDCBOL2 = mdl.gdark_bolom2 ? mdl.gravity_dark2 :
-        mdl.gravity_dark2 / Subs::dlpdlt(mdl.wavelength, Subs::abs(double(mdl.t2)));
+    const double GDCBOL2 = mdl.gdark_bolom2 ? mdl.gravity_dark2 : mdl.gravity_dark2 / Subs::dlpdlt(mdl.wavelength, Subs::abs(double(mdl.t2)));
 
     int nelem2 = star2.size();
 
-    // compute direction of star spot 21
     Subs::Vec3 spot21, spot22;
     
-    bool is_spot21 = mdl.stsp21_long.defined && mdl.stsp21_lat.defined &&
-        mdl.stsp21_fwhm.defined && mdl.stsp21_tcen.defined;
-    bool is_spot22 = mdl.stsp22_long.defined && mdl.stsp22_lat.defined &&
-      mdl.stsp22_fwhm.defined && mdl.stsp22_tcen.defined;
+    bool is_spot21 = mdl.stsp21_long.defined && mdl.stsp21_lat.defined && mdl.stsp21_fwhm.defined && mdl.stsp21_tcen.defined;
+    bool is_spot22 = mdl.stsp22_long.defined && mdl.stsp22_lat.defined && mdl.stsp22_fwhm.defined && mdl.stsp22_tcen.defined;
     
     double clong21=0., slong21=0., clat21=0., slat21=0.;
     double clong22=0., slong22=0., clat22=0., slat22=0.;
@@ -234,7 +228,6 @@ void Lcurve::set_star_continuum(const Model& mdl,
         slat21  = std::sin(Subs::deg2rad(mdl.stsp21_lat.value));
     	spot21 = Subs::Vec3(clat21*clong21, clat21*slong21, slat21);
     }
-
     if(is_spot22){
         clong22 = std::cos(Subs::deg2rad(mdl.stsp22_long.value));
         slong22 = std::sin(Subs::deg2rad(mdl.stsp22_long.value));
@@ -243,72 +236,80 @@ void Lcurve::set_star_continuum(const Model& mdl,
     	spot22 = Subs::Vec3(clat22*clong22, clat22*slong22, slat22);
     }
 
-
-    
-    // Star1 surface elements have been completely built with starspots included by now.
-    // Now use star1's surface elements in a nested loop with star2's surface elements to find star2's flux, including irradiation from starspots.
     for(int i=0; i<nelem2; i++){
 
-        // Begin with a single temperature for all surface elements
+        // Begin with a single temperature for all surface elements from the user model input.
         double t2 = Subs::abs(double(mdl.t2));
 
         // Increase temperature based on starspot parameters.
         if(is_spot21 && mdl.stsp21_fwhm > 0){
-            Subs::Vec3 off = star2[i].posn-cofm2;
+            Subs::Vec3 off = star2[i].posn - cofm2; // Pointing from star2 center of mass to surface element
             double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot21)/off.length()));
             t2 += (mdl.stsp21_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp21_fwhm/Constants::EFAC))/2.);
         }
     	if(is_spot22 && mdl.stsp22_fwhm > 0){
-            Subs::Vec3 off = star2[i].posn-cofm2;
+            Subs::Vec3 off = star2[i].posn - cofm2;
             double dist = Subs::rad2deg(std::acos(Subs::dot(off, spot22)/off.length()));
             t2 += (mdl.stsp22_tcen-t2)*std::exp(-Subs::sqr(dist/(mdl.stsp22_fwhm/Constants::EFAC))/2.);
         }
-    
+
+
         if(mdl.finite_irr12 && mdl.absorb > 0){ // Use finite surface elements from star1 to irradiate star2.
-                                                // Allows the donor to be irradiated by starspots on the surface of the accretor (think direct-impact accretion).
-        
-            // Adjust temperature based on local gravity darkening
+                                                // Allows starspots to irradiate.
+                                                // About a 0.1% flux difference for HW Vir LCs.
+                                                // Mostly useful to allow starspots to irradiate.
+
+            // Adjust intrinsic temperature based on local gravity darkening
             double T_intrinsic = t2 * pow(double(star2[i].gravity), GDCBOL2);
-    
-            // Begin loop over star1's elements for precise irradiations
-            double F_irradiation = 0.0;  // Accumulate irradiation flux across all star1 surface elements
+            double F2_intrinsic = Constants::SIGMA * std::pow(T_intrinsic, 4); // Bolometric blackbody flux for star2 surface element
+
+            // Begin loop over star1's elements for finite irradiation
+            double F12_irradiation = 0.0; // Total sum of all incoming flux from star1 irradiating star2 surface element.
             for(int j=0; j<nelem1; j++){
-                // Vector from star2 element to this star1 element
-                Subs::Vec3 vec12 = star1[j].posn - star2[i].posn;
-                double r12 = vec12.length(); // For geometric dilution
-        
-                // Cosine of angle between star1 element normal and direction to star2
-                double mu1 = Subs::dot(star1[j].dirn, -vec12) / r12;
-        
-                // Cosine of angle between star2 element normal and direction to star1 element
-                double mu2 = Subs::dot(star2[i].dirn, vec12) / r12;
+
+                Subs::Vec3 vec21 = star1[j].posn - star2[i].posn; // Vector pointing from star2 element to star1 element
+                double r21 = vec21.length();                      // Scalar distance between star2 element and star1 element            
+
+                Subs::Vec3 vec12 = star2[i].posn - star1[j].posn; // Vector pointing from star1 element to star2 element (= -vec21)
+                double r12 = vec12.length();                      // Scalar distance between star1 element and star2 element (= r21)           
+
+                double mu1 = Subs::dot(star1[j].dirn, vec12) / r12; // Cosine of angle between star1 element normal and the direction to star2 element
+                double mu2 = Subs::dot(star2[i].dirn, vec21) / r21; // Cosine of angle between star2 element normal and the direction to star1 element
         
                 // Only include contribution if both elements face each other (ignores edge cases like rotation/beaming)
                 if(mu1 > 0.0 && mu2 > 0.0){
+
+                    // Limb darkening and geometric dilution apply to specific intensity, so calculate star1 surface element bolometric intensity
+                    double star1j_intensity_bolometric = Constants::SIGMA * std::pow(star1[j].temp, 4) / Constants::PI;
+                    // Bolometric intensity Units: erg / s / cm^2  / sr
+
+                    star1j_intensity_bolometric *= ldc1.imu(mu1);  // Correct the intensity for limb darkening using the viewing angle towards the star2 surface element.
+                                                        // This uses user-input (filter integrated) limb darkening coefficients
+                                                        // Ideally, we'd use bolometric limb darkening, but this will have to do for now.
+                                                        // This line assumes the LDC coefficients are normalized such that flux is conserved. Claret+2020 seems to be.
                     
-                    // Geometric factor: projected area / distance^2
-                    double geom_factor = mu1 * mu2 * star1[j].area / (r12*r12);
-        
-                    // Add to irradiation flux (absorbed fraction)
-                    F_irradiation += mdl.absorb * pow(star1[j].temp, 4) * geom_factor; //star1[j].temp already accounts for its gravity darkening
+                    // Geometric dilution from distance and solid angle projections.                    
+                    double geom = mu1 * mu2 * star1[j].area / (r12*r12);
+                    
+                    F12_irradiation += star1j_intensity_bolometric * geom;
                 }
             }
 
-            // Total effective temperature including irradiation, which is thermalized and re-emitted locally.
-            double T_eff = pow(pow(T_intrinsic, 4) + F_irradiation, 0.25);
+            // Irradiating flux can be absorbed or reflected.
+            // Absorbing flux increases local temperature. This should spread out through energy transport, but we handle it as local without spread. 
+            // Use mdl.absorb to represent the fraction of incoming flux being absorbed and re-emitted (100% efficiency).
+            // Then (1 - mdl.absorb) is the fraction of incident bolometric intensity that is reflected (only 1/pi of this reflected light reaches the observer)
+            double T2_eff = pow((F2_intrinsic + mdl.absorb*F12_irradiation)/Constants::SIGMA, 0.25);
 
-            double planck_value1 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, mdl.t1) : Subs::planck(mdl.wavelength, mdl.t1);
-            double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T_eff) : Subs::planck(mdl.wavelength, T_eff);
+            // Finally convert bolometric values into filter-integrated or single-wavelength values by using the Plank function.
+            double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T2_eff) : Subs::planck(mdl.wavelength, T2_eff);
 
-            star2[i].flux = star2[i].area * planck_value2;
-            star2[i].temp = T_eff;
-                
-            if(mdl.mirror){
-                star2[i].flux += star2[i].area*geom * planck_value1;
-            }
+            // Define a "flux" (not actually flux) used to estimate total light from the system later.
+            star2[i].flux = star2[i].area * planck_value2; // Units: erg / s / Hz / sr
 
+            // TODO: Reflection, handled by using (1.0 - mdl.absorb). Uses spectrum(temperature) of star1.
                         
-        }else{ // Original behavior: treat star1 as a point source without starspots
+        }else{ // Original behavior: treat star1 as a point source without starspots. This is perfectly fine unless starspots affect irradiation.
 
             vec = cofm1 - star2[i].posn;
             r   = vec.length();
@@ -353,4 +354,3 @@ void Lcurve::set_star_continuum(const Model& mdl,
 // Do not iterate to calculate star1's flux based on star2's surface element flux.
 // TODO: Consider systems with starspot and disc. The disc may block irradiation.
 //     Check that the vector between star1[j].posn and star2[i].posn doesn't intersect disc[k].posn
-
