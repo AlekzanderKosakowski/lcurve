@@ -38,8 +38,8 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
 
   double r1, r2;
   mdl.get_r1r2(r1, r2);
-  double rl1 = Roche::xl12(mdl.q, mdl.spin2); // Distance from center of star1 to the L1 location
-  double rl2 = 1.0 - rl1; // Distance from the center of star2 to the L1 location
+  double rl1 = Roche::xl12(mdl.q, mdl.spin2);
+  double rl2 = 1.0 - rl1;
   ffac1 = r1/rl1;
   ffac2 = r2/rl2;
     
@@ -100,7 +100,7 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
         Subs::integrate_filter(temperature_array, planck_array, mdl.filter);
     }
     
-  set_star_continuum(mdl, star1f, star2f, integrate_filter, temperature_array, planck_array);
+  set_star_continuum(mdl, star1f, star2f, integrate_filter, temperature_array, planck_array, ldc1, ldc2);
 
   // Now coarse grids
   Subs::Buffer1D<Point> star1c;
@@ -125,7 +125,7 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
                      << star2c.size() << std::endl;
 
   if(mdl.nlat1c != mdl.nlat1f || !copy2)
-      set_star_continuum(mdl, star1c, star2c, integrate_filter, temperature_array, planck_array);
+      set_star_continuum(mdl, star1c, star2c, integrate_filter, temperature_array, planck_array, ldc1, ldc2);
 
   // Work out grid switching parameters
   Ginterp gint;
