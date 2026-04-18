@@ -506,8 +506,8 @@ int main(int argc, char* argv[]){
         std::cout << "log10(g2 [cgs]) = " << form(logg2) << std::endl;
         std::cout << "Vol-averaged r1 = " << form(rv1) << std::endl;
         std::cout << "Vol-averaged r2 = " << form(rv2) << std::endl;
-        std::cout << "ffac1 (r1/r1L1) = " << form(ffac1) << std::endl;
-        std::cout << "ffac2 (r2/r2L1) = " << form(ffac2) << std::endl;
+        std::cout << "ffac1 (r1/r_L1) = " << form(ffac1) << std::endl;
+        std::cout << "ffac2 (r2/r_L1) = " << form(ffac2) << std::endl;
 
         if(!no_file){
             // Scale error bars
