@@ -165,10 +165,11 @@ int main(int argc, char* argv[]){
         input.sign_in("y2",       Subs::Input::LOCAL,  Subs::Input::PROMPT);
         input.sign_in("colormap", Subs::Input::LOCAL,  Subs::Input::PROMPT);
         input.sign_in("colorscale", Subs::Input::LOCAL,  Subs::Input::PROMPT); // log,linear
-        input.sign_in("reverse", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // false,true
-        input.sign_in("ncolors", Subs::Input::LOCAL,  Subs::Input::PROMPT);    // < 240 (higher is not always better)
+        input.sign_in("reverse",  Subs::Input::LOCAL,  Subs::Input::PROMPT);    // false,true
+        input.sign_in("ncolors",  Subs::Input::LOCAL,  Subs::Input::PROMPT);    // < 240 (higher is not always better)
+        input.sign_in("iscale",   Subs::Input::LOCAL,  Subs::Input::PROMPT);    // false,true
         input.sign_in("width",    Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
-        input.sign_in("marker",    Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
+        input.sign_in("marker",   Subs::Input::LOCAL,  Subs::Input::NOPROMPT);
     
         std::string smodel;
         input.get_value("model", smodel, "model", "model file of parameter values");
@@ -199,9 +200,11 @@ int main(int argc, char* argv[]){
         std::string colorscale;
         input.get_value("colorscale", colorscale, "log", "[linear, log]");
         bool reverse;
-        input.get_value("reverse", reverse, false, "[yes, no]");
+        input.get_value("reverse", reverse, false, "Reverse colormap? [yes, no]");
         float ncols;
         input.get_value("ncolors", ncols, 32.f, 16.f, 239.f, "color grid resolution (< 240)");
+        bool iscale;
+        input.get_value("iscale", iscale, false, "Colormap limits set per object? [yes, no]");
         float marker;
         input.get_value("marker", marker,  1.f, -1.f, 20.f, "surface element marker style");
         float width;
@@ -258,7 +261,10 @@ int main(int argc, char* argv[]){
         Lcurve::set_star_grid(model, Roche::SECONDARY, true, star2);
 
         // Apply star continuum for coloring.
-        ////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////
+        // Temperature grid here used for filter integration. //
+        ////////////////////////////////////////////////////////
+        
         double temperature_grid_min = 100.0;
         double temperature_grid_max = 100000.0;
         double temperature_grid_step = 200.0;
@@ -288,22 +294,26 @@ int main(int argc, char* argv[]){
 
         Lcurve::LDC ldc1 = model.get_ldc1();
         Lcurve::LDC ldc2 = model.get_ldc2();
+
         
         set_star_continuum(model, star1, star2, integrate_filter, temperature_array, planck_array, ldc1, ldc2);
         ////////////////////////////////////////////////////////////////////////////
-        // Find the min and max temperature across the entire system.
-        // Using "flux" adds an artificial gradient from equator to pole due to grid element area
+        // Find the min and max temperature for each star for individual scaling (iscale).
         // TODO: Add more loops for disc and accretion spot.
-        double min_stat=1e20, max_stat=1e-20;
+        double min_star1=1e20, max_star1=1e-20;
+        double min_star2=1e20, max_star2=1e-20;
         for(int i=0; i < star1.size(); i++){
-            if(star1[i].temp < min_stat){min_stat = star1[i].temp;}
-            if(star1[i].temp > max_stat){max_stat = star1[i].temp;}
+            if(star1[i].temp < min_star1){min_star1 = star1[i].temp;}
+            if(star1[i].temp > max_star1){max_star1 = star1[i].temp;}
         }
         for(int i=0; i < star2.size(); i++){
-            if(star2[i].temp < min_stat){min_stat = star2[i].temp;}
-            if(star2[i].temp > max_stat){max_stat = star2[i].temp;}
+            if(star2[i].temp < min_star2){min_star2 = star2[i].temp;}
+            if(star2[i].temp > max_star2){max_star2 = star2[i].temp;}
         }
-        
+
+        double min_system = std::min(min_star1, min_star2);
+        double max_system = std::max(max_star1, max_star2);
+
         
         if(model.add_disc){
 
@@ -317,7 +327,6 @@ int main(int argc, char* argv[]){
             Lcurve::set_disc_edge(model, false, inner_edge);
 	
             std::vector<std::pair<double,double> > eclipses;
-
             if(model.opaque){
 	    
                 // Apply eclipse by disc to star 1
@@ -334,8 +343,21 @@ int main(int argc, char* argv[]){
                         star2[i].eclipse.push_back(eclipses[j]);
                 }
             }
+            
+            // Set the surface brightness of the disc
+            set_disc_continuum(rdisc2, model.temp_disc, model.texp_disc,
+                             model.wavelength, disc,
+                             integrate_filter, temperature_array, planck_array);
+            
+            // Set the surface brightness of outer edge, accounting for
+            // irradiation by star 2
+            set_edge_continuum(model.temp_edge, r2, std::abs(model.t2),
+                             model.absorb_edge, model.wavelength, outer_edge,
+                             integrate_filter, temperature_array, planck_array);
         }
 
+
+        
         if(model.add_spot){
             //      double wave = 5000, temp_spot = 10000, cfrac_spot = 0.5, height_spot = 0.01;
             //      Lcurve::set_bright_spot_grid(q, iangle, r1, r2, roche1, roche2, eclipse1, eclipse2, delta_phase, radius_spot, 
@@ -377,6 +399,34 @@ int main(int argc, char* argv[]){
             }	
         }
 
+        // Disc must be colored by "flux" since it does not have a physical temperature
+        double min_disc = 1e20, max_disc = 1e-20;
+        for(int i=0; i < disc.size(); i++){
+            if(disc[i].flux < min_disc){min_disc = disc[i].flux;}
+            if(disc[i].flux > max_disc){max_disc = disc[i].flux;}
+        }
+        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
+        for(int i=0; i < outer_edge.size(); i++){
+            if(outer_edge[i].flux < min_disc){min_disc = outer_edge[i].flux;}
+            if(outer_edge[i].flux > max_disc){max_disc = outer_edge[i].flux;}
+        }
+
+        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
+        for(int i=0; i < inner_edge.size(); i++){
+            if(inner_edge[i].flux < min_disc){min_disc = inner_edge[i].flux;}
+            if(inner_edge[i].flux > max_disc){max_disc = inner_edge[i].flux;}
+        }
+        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
+
+
+        // Bright spot must be colored by "flux" since it does not have a physical temperature
+        double min_spot = 1e20, max_spot = 1e-20;       
+        for(int i=0; i < bspot.size(); i++){
+            if(bspot[i].flux < min_spot){min_spot = bspot[i].flux;}
+            if(bspot[i].flux > max_spot){max_spot = bspot[i].flux;}
+        }
+
+        
         // Plot
         Subs::Plot plot(device);
 
@@ -391,8 +441,10 @@ int main(int argc, char* argv[]){
 
         for(int np=0; np<nphase; np++){
 
-            if(nphase > 1) phase = phase1 + (phase2-phase1)*np/double(nphase-1);
-
+            if(nphase > 1){
+                phase = phase1 + (phase2-phase1)*np/double(nphase-1);
+            }
+            
             // cpgenv(x1, x2, y1, y2, 1, -2);
             cpgpage(); // Manually start a new Postscript page, otherwise all pages get stacked into one.
             cpgsvp(0.01, 0.99, 0.01, 0.99); // X and Y limits for the plotting area (think Python's plt.subplots_adjust(left, right, bottom, top)
@@ -422,35 +474,52 @@ int main(int argc, char* argv[]){
             cpgsch(2);
 
             // star 1
-            cpgsci(4);
-            plot_visible(star1, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
+            cpgsci(4); // Changes point color. Ignored since we define colors inside plot_visible() anyway.
+            plot_visible(star1, earth, cofm, xsky, ysky, phase,
+                iscale ? min_star1 : min_system,
+                iscale ? max_star1 : max_system,
+                colorscale, ncolors, plt_marker);
 
             // star 2
             cpgsci(2);
-            plot_visible(star2, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
+            plot_visible(star2, earth, cofm, xsky, ysky, phase,
+                iscale ? min_star2 : min_system,
+                iscale ? max_star2 : max_system,
+                colorscale, ncolors, plt_marker);
 
             if(model.add_disc){
-
                 // disc surface
                 cpgsci(3);
-                plot_visible(disc, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
+                plot_visible(disc, earth, cofm, xsky, ysky, phase,
+                    min_disc,
+                    max_disc,
+                    colorscale, ncolors, plt_marker);
 
                 // edges
                 cpgsci(1);
-                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
-                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, plt_marker);
+                plot_visible(outer_edge, earth, cofm, xsky, ysky, phase,
+                    min_disc,
+                    max_disc,
+                    colorscale, ncolors, -1);
+                plot_visible(inner_edge, earth, cofm, xsky, ysky, phase,
+                    min_disc,
+                    max_disc,
+                    colorscale, ncolors, -1);
             }
 
             if(model.add_spot){
                 cpgsci(2);
-                plot_visible(stream, earth, cofm, xsky, ysky, phase, min_stat, max_stat, colorscale, ncolors, -1);
+                plot_visible(stream, earth, cofm, xsky, ysky, phase,
+                    min_spot,
+                    max_spot,
+                    colorscale, ncolors, -1); // The actual impact stream, not the spot
                 cpgsci(2);
                 double cosbs = Subs::dot(earth, stream[stream.size()-1].posn);
                 if(cosbs > 0. && stream[stream.size()-1].visible(phase)){
                     r = stream[stream.size()-1].posn - cofm;
                     cpgslw(6);
                     cpgsch(0.5+3.5*cosbs);
-                    cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 18);
+                    cpgpt1(Subs::dot(r, xsky), Subs::dot(r, ysky), 18); // This is the bright spot representation (a single point)
                 }
             }
             cpgebuf();
@@ -472,17 +541,6 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
         log_scaling = true;
     }
 
-    bool object_scaling=false; //  TODO, user input for "object" or "system" scaling.
-    if(object_scaling){
-        fmin = 1e30;
-        fmax = -1e30;
-        for(int i=0; i<object.size(); i++){
-            fmin = std::min<double>(fmin, object[i].temp);
-            fmax = std::max<double>(fmax, object[i].temp);
-        }
-    }
-
-    
     double log_fmin = log10(fmin + 1e-20);
     double log_fmax = log10(fmax + 1e-20);
 
@@ -493,10 +551,11 @@ void plot_visible(const Subs::Buffer1D<Lcurve::Point>& object, const Subs::Vec3&
 
             r = object[i].posn - cofm;
 
-            double point_flux = object[i].temp;
+            // fmin is the input mininum "flux". If it is > 1, then the inputs are temperature, otherwise they are flux
+            double point_flux = fmin > 1 ? object[i].temp : object[i].flux;
             double log_point_flux = log10(point_flux + 1e-20);
 
-            double norm; // Normalize the point's flux.
+            double norm; // Normalize the point's flux or temperature.
             if(log_scaling){
                 norm = (log_point_flux - log_fmin) / (log_fmax - log_fmin);
             }else{
