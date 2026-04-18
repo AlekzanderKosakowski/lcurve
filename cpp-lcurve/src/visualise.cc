@@ -285,8 +285,11 @@ int main(int argc, char* argv[]){
         if(integrate_filter){
             Subs::integrate_filter(temperature_array, planck_array, model.filter);
         }
+
+        Lcurve::LDC ldc1 = model.get_ldc1();
+        Lcurve::LDC ldc2 = model.get_ldc2();
         
-        set_star_continuum(model, star1, star2, integrate_filter, temperature_array, planck_array);
+        set_star_continuum(model, star1, star2, integrate_filter, temperature_array, planck_array, ldc1, ldc2);
         ////////////////////////////////////////////////////////////////////////////
         // Find the min and max temperature across the entire system.
         // Using "flux" adds an artificial gradient from equator to pole due to grid element area
