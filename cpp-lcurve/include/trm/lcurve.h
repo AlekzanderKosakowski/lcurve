@@ -303,8 +303,11 @@ namespace Lcurve {
     //! Radius of star 1 / separation
     Pparam r1;
 
-    //! Radius of star 1 / separation
+    //! Radius of star 2 / separation
     Pparam r2;
+
+    //! Radius of star 3 / separation (of the inner binary)
+    Pparam r3;
 
     //! Phase of third contact
     Pparam cphi3;
@@ -323,6 +326,9 @@ namespace Lcurve {
 
     //! Temperature in K star 2
     Pparam t2;
+
+    //! Temperature in K star 3
+    Pparam t3;
 
     //! Star 1, LDC #1
     Pparam ldc1_1;
@@ -347,6 +353,18 @@ namespace Lcurve {
 
     //! Star 2, LDC #4
     Pparam ldc2_4;
+
+    //! Star 3, LDC #1
+    Pparam ldc3_1;
+
+    //! Star 3, LDC #2
+    Pparam ldc3_2;
+
+    //! Star 3, LDC #3
+    Pparam ldc3_3;
+
+    //! Star 3, LDC #4
+    Pparam ldc3_4;
 
     //! Velocity scale  = v1+v2, unprojected
     Pparam velocity_scale;
@@ -386,9 +404,6 @@ namespace Lcurve {
 
     //! Cubic term
     Pparam cube;
-
-    //! Third light fraction
-    Pparam third;
 
     //! Inner radius of disc
     Pparam rdisc1;
@@ -614,6 +629,9 @@ namespace Lcurve {
     //! Type of limb darkening star 2
     LDC::LDCtype limb2;
 
+    //! Type of limb darkening star 3. Uses a string for now.
+    std::string limb3;
+
     //! Assume any flux not absorbed is truly reflected (or just ignore it)
     bool mirror;
 
@@ -640,6 +658,10 @@ namespace Lcurve {
     //! Very slow due to nested loop. Seems to be ~3x slower than without.
     //! Be sure to use small values for nlat1c, nlat2c, nlat1f, nlat2f
     bool finite_irr12;
+
+    //! Third light enabled/disabled flag.
+    bool third;
+
 
     //! Returns relative radii, accounting for method of parameterising them
     void get_r1r2(double& rr1, double& rr2) const {
@@ -813,7 +835,7 @@ namespace Lcurve {
                          Subs::Buffer1D<float>& bright2);
 
   //! Computes the flux at a given phase
-  double comp_light(double iangle, const LDC& ldc1, const LDC& ldc2,
+  double comp_light(double iangle, const LDC& ldc1, const LDC& ldc2, const double& ldc3,
                     double lin_limb_disc, double quad_limb_disc,
                     double phase, double expose, int ndiv, double q,
                     double beam_factor1, double beam_factor2,
@@ -825,7 +847,9 @@ namespace Lcurve {
                     const Subs::Buffer1D<Lcurve::Point>& star2c,
                     const Subs::Buffer1D<Lcurve::Point>& disc,
                     const Subs::Buffer1D<Lcurve::Point>& edge,
-                    const Subs::Buffer1D<Lcurve::Point>& spot);
+                    const Subs::Buffer1D<Lcurve::Point>& spot,
+                    bool third, double r3, double t3, bool integrate_filter,
+                    const std::vector<double>& temperature_array, const std::vector<double>& planck_array, double wavelength);
 
   //! Computes flux from star 1 only
   double comp_star1(double iangle, const LDC& ldc1, double phase,
