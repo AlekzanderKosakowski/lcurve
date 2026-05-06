@@ -10,16 +10,22 @@
 
 double Subs::planck(double wave, double temp){
   
-    const double FAC1 = 2.e27*Constants::H*Constants::C;
-    const double FAC2 = 1.e9*Constants::H*Constants::C/Constants::K;
-    
-    double efac = FAC2/(wave*temp);
-    if(efac > 40.){
-    	return FAC1*exp(-efac)/(wave*sqr(wave));
+    const double h = Constants::H;
+    const double c = Constants::C;
+    const double k = Constants::K;
+
+    double lambda = wave * 1e-9; // Convert to meters (parameters.txt uses nanometers)
+
+    double x = (h * c) / (lambda * k * temp);
+    double prefactor = (2.0 * h * c * c) / pow(lambda, 5);
+
+    if(x > 40.0){
+        return prefactor * exp(-x);
     }else{
-    	return FAC1/(exp(efac)-1.)/(wave*sqr(wave));
+        return prefactor / (exp(x) - 1.0);
     }
 }
+
 
 /** Computes the logarithmic derivative of the Planck function 
  * Bnu wrt wavelength (i.e. d ln(Bnu) / d ln(lambda)) as a function of wavelength and temperature
@@ -32,7 +38,7 @@ double Subs::dplanck(double wave, double temp){
     const double FAC2 = 1.e9*Constants::H*Constants::C/Constants::K;
     
     double efac = FAC2/(wave*temp);
-    return efac/(1.-exp(-efac)) - 3.;
+    return efac/(1.-exp(-efac)) - 5.;
 }
 
 /** Computes the logarithmic derivative of the Planck function 
