@@ -52,6 +52,14 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
   LDC ldc1 = mdl.get_ldc1();
   LDC ldc2 = mdl.get_ldc2();
 
+  double ldc3; // Average limb darkening value over a visible surface of an unobstructed star.
+  if(mdl.limb3 == "Poly"){
+      ldc3 = 1 - mdl.ldc3_1/3.0 - mdl.ldc3_2/6.0- - mdl.ldc3_3/10.0 - mdl.ldc3_4/15.0;
+  }else if(mdl.limb3 == "Claret"){
+      ldc3 = 1.0 - 0.2*mdl.ldc3_1 - (1.0/3.0)*mdl.ldc3_2 - (3.0/7.0)*mdl.ldc3_3 - 0.5*mdl.ldc3_4;
+  }
+
+    
   // Compute gravitational radius of star 1 if need be. An extra factor
   // of 4 saves multiplication in the innermost loops later
   double rlens1 = 0.;
@@ -307,14 +315,14 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
 
       }else{
 	
-          calc[np] = slfac*comp_light(mdl.iangle, ldc1, ldc2,
+          calc[np] = slfac*comp_light(mdl.iangle, ldc1, ldc2, ldc3,
                                       mdl.lin_limb_disc, mdl.quad_limb_disc,
                                       phase, expose, data[np].ndiv,
                                       mdl.q, mdl.beam_factor1, mdl.beam_factor2,
                                       mdl.spin1, mdl.spin2, mdl.velocity_scale,
                                       mdl.glens1, rlens1, gint, star1f, star2f,
-                                      star1c, star2c, disc, edge, spot) + mdl.third;
-
+                                      star1c, star2c, disc, edge, spot,
+                                      mdl.third, mdl.r3, mdl.t3, integrate_filter, temperature_array, planck_array, mdl.wavelength);
       }
   }
 
