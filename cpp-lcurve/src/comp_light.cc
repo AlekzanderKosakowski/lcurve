@@ -36,7 +36,7 @@
  * \return the light curve value desired.
  */
 
-double Lcurve::comp_light(double iangle, const LDC& ldc1, const LDC& ldc2, 
+double Lcurve::comp_light(double iangle, const LDC& ldc1, const LDC& ldc2, const double& ldc3,
 			  double lin_limb_disc, double quad_limb_disc,
                           double phase, double expose, int ndiv, double q,
 			  double beam_factor1, double beam_factor2,
@@ -49,7 +49,9 @@ double Lcurve::comp_light(double iangle, const LDC& ldc1, const LDC& ldc2,
                           const Subs::Buffer1D<Lcurve::Point>& star2c,
 			  const Subs::Buffer1D<Lcurve::Point>& disc,
 			  const Subs::Buffer1D<Lcurve::Point>& edge,
-                          const Subs::Buffer1D<Lcurve::Point>& spot){
+                          const Subs::Buffer1D<Lcurve::Point>& spot,
+              bool third, double r3, double t3, bool integrate_filter,
+              const std::vector<double>& temperature_array, const std::vector<double>& planck_array, double wavelength){
 
     const double XCOFM = q/(1.+q);
     const double cosi  = cos(Constants::TWOPI*iangle/360.);
@@ -60,7 +62,7 @@ double Lcurve::comp_light(double iangle, const LDC& ldc1, const LDC& ldc2,
     int ptype, i, nelem1, nelem2, nd;
     double sum=0., ssum, ssum2, mu, wgt, vr, phi, p, ph, mag, pd, d, phsq, rd;
     double vx, vy, vn, mud, ommu;
-
+        
     for(nd=0; nd<ndiv; nd++){
 
         if(ndiv == 1){
@@ -187,6 +189,13 @@ double Lcurve::comp_light(double iangle, const LDC& ldc1, const LDC& ldc2,
                 ssum += mu*spot[i].flux;
         }
 
+        // Third light contribution.
+        if(third){
+            double planck_value3 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, t3) : Subs::planck(wavelength, t3);
+            ssum += (Constants::PI * r3*r3 * planck_value3) * ldc3;
+        }
+
+        // Finalize with finite exposure time weights
         sum = sum + wgt*ssum;
     }
 
