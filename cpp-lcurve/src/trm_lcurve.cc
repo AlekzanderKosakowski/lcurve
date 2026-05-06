@@ -29,12 +29,14 @@ Lcurve::Model::Model(const std::string& file) {
     names["iangle"]         = false;
     names["r1"]             = false;
     names["r2"]             = false;
+    names["r3"]             = false;
     names["cphi3"]          = false;
     names["cphi4"]          = false;
     names["spin1"]          = false;
     names["spin2"]          = false;
     names["t1"]             = false;
     names["t2"]             = false;
+    names["t3"]             = false;
     names["ldc1_1"]         = false;
     names["ldc1_2"]         = false;
     names["ldc1_3"]         = false;
@@ -43,6 +45,10 @@ Lcurve::Model::Model(const std::string& file) {
     names["ldc2_2"]         = false;
     names["ldc2_3"]         = false;
     names["ldc2_4"]         = false;
+    names["ldc3_1"]         = false;
+    names["ldc3_2"]         = false;
+    names["ldc3_3"]         = false;
+    names["ldc3_4"]         = false;
     names["velocity_scale"] = false;
     names["beam_factor1"]   = false;
     names["beam_factor2"]   = false;
@@ -56,7 +62,6 @@ Lcurve::Model::Model(const std::string& file) {
     names["slope"]          = false;
     names["quad"]           = false;
     names["cube"]           = false;
-    names["third"]          = false;
     names["rdisc1"]         = false;
     names["rdisc2"]         = false;
     names["height_disc"]    = false;
@@ -144,6 +149,7 @@ Lcurve::Model::Model(const std::string& file) {
     names["mucrit2"] = false;
     names["limb1"] = false;
     names["limb2"] = false;
+    names["limb3"] = false;
     names["mirror"] = false;
     names["add_disc"] = false;
     names["nrad"] = false;
@@ -152,6 +158,7 @@ Lcurve::Model::Model(const std::string& file) {
     names["nspot"] = false;
     names["iscale"] = false;
     names["finite_irr12"] = false;
+    names["third"] = false;
 
     // Parameter value pairs
     std::map<std::string, std::string> pv;
@@ -218,15 +225,15 @@ Lcurve::Model::Model(const std::string& file) {
 
     std::cerr << n << " lines read from " << file << std::endl;
 
-    // Check that everything has been initialised, except for the star spots
-    // that do not have to be defined and some recently added parameters
+    // Check that most parameters have initialized, with a few explicit exceptions.except for the star spots
+    // Set default values for parameter not initialized.
     bool ok = true;
     for(NIT nit=names.begin(); nit!=names.end(); nit++){
         if(!nit->second){
-            if(nit->first == "pdot" || nit->first == "third" || nit->first == "temp_edge" || nit->first == "absorb_edge"){
-                std::cerr << nit->first << " was not defined; will be set = 0" << std::endl;
-                pv[nit->first] = "0 1.e-10 1.e-10 0 0";
-            }else if(nit->first == "finite_irr12" || nit->first == "filter"){
+            if(nit->first == "pdot" || nit->first == "temp_edge" || nit->first == "absorb_edge" || nit->first == "r3" || nit->first == "t3"){
+                std::cerr << nit->first << " was not defined; will be set = 0 1.e-10 1.e-10 0 1" << std::endl;
+                pv[nit->first] = "0 1.e-10 1.e-10 0 1";
+            }else if(nit->first == "finite_irr12" || nit->first == "filter" || nit->first == "third"){
                 pv[nit->first] = "0";
             }else if(nit->first.substr(0,4) != "stsp" && nit->first.substr(0,6) != "stsp1i"){
                 std::cerr << nit->first << " was not defined " << std::endl;
@@ -241,12 +248,14 @@ Lcurve::Model::Model(const std::string& file) {
     iangle           = Pparam(pv["iangle"]);
     r1               = Pparam(pv["r1"]);
     r2               = Pparam(pv["r2"]);
+    r3               = Pparam(pv["r3"]);
     cphi3            = Pparam(pv["cphi3"]);
     cphi4            = Pparam(pv["cphi4"]);
     spin1            = Pparam(pv["spin1"]);
     spin2            = Pparam(pv["spin2"]);
     t1               = Pparam(pv["t1"]);
     t2               = Pparam(pv["t2"]);
+    t3               = Pparam(pv["t3"]);
     ldc1_1           = Pparam(pv["ldc1_1"]);
     ldc1_2           = Pparam(pv["ldc1_2"]);
     ldc1_3           = Pparam(pv["ldc1_3"]);
@@ -255,6 +264,10 @@ Lcurve::Model::Model(const std::string& file) {
     ldc2_2           = Pparam(pv["ldc2_2"]);
     ldc2_3           = Pparam(pv["ldc2_3"]);
     ldc2_4           = Pparam(pv["ldc2_4"]);
+    ldc3_1           = Pparam(pv["ldc3_1"]);
+    ldc3_2           = Pparam(pv["ldc3_2"]);
+    ldc3_3           = Pparam(pv["ldc3_3"]);
+    ldc3_4           = Pparam(pv["ldc3_4"]);
     velocity_scale   = Pparam(pv["velocity_scale"]);
     beam_factor1     = Pparam(pv["beam_factor1"]);
     beam_factor2     = Pparam(pv["beam_factor2"]);
@@ -268,7 +281,6 @@ Lcurve::Model::Model(const std::string& file) {
     slope            = Pparam(pv["slope"]);
     quad             = Pparam(pv["quad"]);
     cube             = Pparam(pv["cube"]);
-    third            = Pparam(pv["third"]);
     rdisc1           = Pparam(pv["rdisc1"]);
     rdisc2           = Pparam(pv["rdisc2"]);
     height_disc      = Pparam(pv["height_disc"]);
@@ -400,7 +412,15 @@ Lcurve::Model::Model(const std::string& file) {
     }else{
         throw Lcurve_Error("Could not recognize the value of limb2 = " + pv["limb2"] + "; should be 'Poly' or 'Claret'");
     }
+    if(pv["limb3"] == "Poly"){
+        limb3 = "Poly";
+    }else if(pv["limb3"] == "Claret"){
+        limb3 = "Claret";
+    }else{
+        throw Lcurve_Error("Could not recognize the value of limb3 = " + pv["limb3"] + "; should be 'Poly' or 'Claret'");
+    }
 
+    
     mirror           = Subs::string_to_bool(pv["mirror"]);
     add_disc         = Subs::string_to_bool(pv["add_disc"]);
     nrad             = Subs::string_to_int(pv["nrad"]);
@@ -409,6 +429,7 @@ Lcurve::Model::Model(const std::string& file) {
     nspot            = Subs::string_to_int(pv["nspot"]);
     iscale           = Subs::string_to_bool(pv["iscale"]);
     finite_irr12     = Subs::string_to_bool(pv["finite_irr12"]);
+    third            = Subs::string_to_bool(pv["third"]);
 
 }
 
@@ -425,10 +446,12 @@ int Lcurve::Model::nvary() const {
         if(cphi3.vary) n++;
         if(cphi4.vary) n++;
     }
+    if(r3.vary) n++;
     if(spin1.vary) n++;
     if(spin2.vary) n++;
     if(t1.vary) n++;
     if(t2.vary) n++;
+    if(t3.vary) n++;
     if(ldc1_1.vary) n++;
     if(ldc1_2.vary) n++;
     if(ldc1_3.vary) n++;
@@ -451,7 +474,6 @@ int Lcurve::Model::nvary() const {
     if(slope.vary) n++;
     if(quad.vary) n++;
     if(cube.vary) n++;
-    if(third.vary) n++;
 
     if(add_disc){
         if(rdisc1.vary) n++;
@@ -528,10 +550,12 @@ void Lcurve::Model::set_param(const Subs::Array1D<double>& vpar) {
         if(cphi3.vary)     cphi3.value               = vpar[n++];
         if(cphi4.vary)     cphi4.value               = vpar[n++];
     }
+    if(r3.vary)        r3.value                  = vpar[n++];
     if(spin1.vary)     spin1.value               = vpar[n++];
     if(spin2.vary)     spin2.value               = vpar[n++];
     if(t1.vary)        t1.value                  = vpar[n++];
     if(t2.vary)        t2.value                  = vpar[n++];
+    if(t3.vary)        t3.value                  = vpar[n++];
     if(ldc1_1.vary)    ldc1_1.value              = vpar[n++];
     if(ldc1_2.vary)    ldc1_2.value              = vpar[n++];
     if(ldc1_3.vary)    ldc1_3.value              = vpar[n++];
@@ -540,6 +564,10 @@ void Lcurve::Model::set_param(const Subs::Array1D<double>& vpar) {
     if(ldc2_2.vary)    ldc2_2.value              = vpar[n++];
     if(ldc2_3.vary)    ldc2_3.value              = vpar[n++];
     if(ldc2_4.vary)    ldc2_4.value              = vpar[n++];
+    if(ldc3_1.vary)    ldc3_1.value              = vpar[n++];
+    if(ldc3_2.vary)    ldc3_2.value              = vpar[n++];
+    if(ldc3_3.vary)    ldc3_3.value              = vpar[n++];
+    if(ldc3_4.vary)    ldc3_4.value              = vpar[n++];
     if(velocity_scale.vary) velocity_scale.value = vpar[n++];
     if(beam_factor1.vary) beam_factor1.value     = vpar[n++];
     if(beam_factor2.vary) beam_factor2.value     = vpar[n++];
@@ -554,7 +582,6 @@ void Lcurve::Model::set_param(const Subs::Array1D<double>& vpar) {
     if(slope.vary) slope.value                   = vpar[n++];
     if(quad.vary) quad.value                     = vpar[n++];
     if(cube.vary) cube.value                     = vpar[n++];
-    if(third.vary) third.value                   = vpar[n++];
 
     if(add_disc){
         if(rdisc1.vary) rdisc1.value                 = vpar[n++];
@@ -640,6 +667,8 @@ std::string Lcurve::Model::get_name(int i) const {
         if(cphi4.vary) n++;
         if(n == i) return "cphi4";
     }
+    if(r3.vary) n++;
+    if(n == i) return "r3";
 
     if(spin1.vary) n++;
     if(n == i) return "spin1";
@@ -652,6 +681,9 @@ std::string Lcurve::Model::get_name(int i) const {
 
     if(t2.vary) n++;
     if(n == i) return "t2";
+
+    if(t3.vary) n++;
+    if(n == i) return "t3";
 
     if(ldc1_1.vary) n++;
     if(n == i) return "ldc1_1";
@@ -676,6 +708,18 @@ std::string Lcurve::Model::get_name(int i) const {
 
     if(ldc2_4.vary) n++;
     if(n == i) return "ldc2_4";
+
+    if(ldc3_1.vary) n++;
+    if(n == i) return "ldc3_1";
+
+    if(ldc3_2.vary) n++;
+    if(n == i) return "ldc3_2";
+
+    if(ldc3_3.vary) n++;
+    if(n == i) return "ldc3_3";
+
+    if(ldc3_4.vary) n++;
+    if(n == i) return "ldc3_4";
 
     if(velocity_scale.vary)   n++;
     if(n == i) return "velocity_scale";
@@ -715,9 +759,6 @@ std::string Lcurve::Model::get_name(int i) const {
 
     if(cube.vary) n++;
     if(n == i) return "cube";
-
-    if(third.vary) n++;
-    if(n == i) return "third";
 
     if(add_disc){
         if(rdisc1.vary) n++;
@@ -912,6 +953,11 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
         n++;
     }
 
+    if(t3.vary) {
+        if(vpar[n] <= 500. || vpar[n] > 1.e6) return true;
+        n++;
+    }
+
     if(ldc1_1.vary){
         if(vpar[n] < -1. || vpar[n] > 1.) return true;
         n++;
@@ -1001,8 +1047,6 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
         if(vpar[n] < -2. || vpar[n] > 2.) return true;
         n++;
     }
-
-    if(third.vary) n++;
 
     if(add_disc){
 
@@ -1249,10 +1293,12 @@ Subs::Array1D<double> Lcurve::Model::get_param() const {
         if(cphi3.vary)  temp.push_back(cphi3.value);
         if(cphi4.vary)  temp.push_back(cphi4.value);
     }
+    if(r3.vary)     temp.push_back(r3.value);
     if(spin1.vary)  temp.push_back(spin1.value);
     if(spin2.vary)  temp.push_back(spin2.value);
     if(t1.vary)     temp.push_back(t1.value);
     if(t2.vary)     temp.push_back(t2.value);
+    if(t3.vary)     temp.push_back(t3.value);
     if(ldc1_1.vary) temp.push_back(ldc1_1.value);
     if(ldc1_2.vary) temp.push_back(ldc1_2.value);
     if(ldc1_3.vary) temp.push_back(ldc1_3.value);
@@ -1261,6 +1307,10 @@ Subs::Array1D<double> Lcurve::Model::get_param() const {
     if(ldc2_2.vary) temp.push_back(ldc2_2.value);
     if(ldc2_3.vary) temp.push_back(ldc2_3.value);
     if(ldc2_4.vary) temp.push_back(ldc2_4.value);
+    if(ldc3_1.vary) temp.push_back(ldc3_1.value);
+    if(ldc3_2.vary) temp.push_back(ldc3_2.value);
+    if(ldc3_3.vary) temp.push_back(ldc3_3.value);
+    if(ldc3_4.vary) temp.push_back(ldc3_4.value);
     if(velocity_scale.vary) temp.push_back(velocity_scale.value);
     if(beam_factor1.vary) temp.push_back(beam_factor1.value);
     if(beam_factor2.vary) temp.push_back(beam_factor2.value);
@@ -1275,8 +1325,7 @@ Subs::Array1D<double> Lcurve::Model::get_param() const {
     if(slope.vary) temp.push_back(slope.value);
     if(quad.vary) temp.push_back(quad.value);
     if(cube.vary) temp.push_back(cube.value);
-    if(third.vary) temp.push_back(third.value);
-
+    
     if(add_disc){
         if(rdisc1.vary) temp.push_back(rdisc1.value);
         if(rdisc2.vary) temp.push_back(rdisc2.value);
@@ -1383,10 +1432,12 @@ Subs::Array1D<double> Lcurve::Model::get_range() const {
         if(cphi3.vary) temp.push_back(cphi3.range);
         if(cphi4.vary) temp.push_back(cphi4.range);
     }
+    if(r3.vary)    temp.push_back(r3.range);
     if(spin1.vary) temp.push_back(spin1.range);
     if(spin2.vary) temp.push_back(spin2.range);
     if(t1.vary) temp.push_back(t1.range);
     if(t2.vary) temp.push_back(t2.range);
+    if(t3.vary) temp.push_back(t3.range);
     if(ldc1_1.vary) temp.push_back(ldc1_1.range);
     if(ldc1_2.vary) temp.push_back(ldc1_2.range);
     if(ldc1_3.vary) temp.push_back(ldc1_3.range);
@@ -1395,6 +1446,10 @@ Subs::Array1D<double> Lcurve::Model::get_range() const {
     if(ldc2_2.vary) temp.push_back(ldc2_2.range);
     if(ldc2_3.vary) temp.push_back(ldc2_3.range);
     if(ldc2_4.vary) temp.push_back(ldc2_4.range);
+    if(ldc3_1.vary) temp.push_back(ldc3_1.range);
+    if(ldc3_2.vary) temp.push_back(ldc3_2.range);
+    if(ldc3_3.vary) temp.push_back(ldc3_3.range);
+    if(ldc3_4.vary) temp.push_back(ldc3_4.range);
     if(velocity_scale.vary) temp.push_back(velocity_scale.range);
     if(beam_factor1.vary) temp.push_back(beam_factor1.range);
     if(beam_factor2.vary) temp.push_back(beam_factor2.range);
@@ -1409,7 +1464,6 @@ Subs::Array1D<double> Lcurve::Model::get_range() const {
     if(slope.vary) temp.push_back(slope.range);
     if(quad.vary) temp.push_back(quad.range);
     if(cube.vary) temp.push_back(cube.range);
-    if(third.vary) temp.push_back(third.range);
 
     if(add_disc){
         if(rdisc1.vary) temp.push_back(rdisc1.range);
@@ -1517,10 +1571,12 @@ Subs::Array1D<double> Lcurve::Model::get_dstep() const {
         if(cphi3.vary) temp.push_back(cphi3.dstep);
         if(cphi4.vary) temp.push_back(cphi4.dstep);
     }
+    if(r3.vary) temp.push_back(r3.dstep);
     if(spin1.vary) temp.push_back(spin1.dstep);
     if(spin2.vary) temp.push_back(spin2.dstep);
     if(t1.vary) temp.push_back(t1.dstep);
     if(t2.vary) temp.push_back(t2.dstep);
+    if(t3.vary) temp.push_back(t3.dstep);
     if(ldc1_1.vary) temp.push_back(ldc1_1.dstep);
     if(ldc1_2.vary) temp.push_back(ldc1_2.dstep);
     if(ldc1_3.vary) temp.push_back(ldc1_3.dstep);
@@ -1529,6 +1585,10 @@ Subs::Array1D<double> Lcurve::Model::get_dstep() const {
     if(ldc2_2.vary) temp.push_back(ldc2_2.dstep);
     if(ldc2_3.vary) temp.push_back(ldc2_3.dstep);
     if(ldc2_4.vary) temp.push_back(ldc2_4.dstep);
+    if(ldc3_1.vary) temp.push_back(ldc3_1.dstep);
+    if(ldc3_2.vary) temp.push_back(ldc3_2.dstep);
+    if(ldc3_3.vary) temp.push_back(ldc3_3.dstep);
+    if(ldc3_4.vary) temp.push_back(ldc3_4.dstep);
     if(velocity_scale.vary) temp.push_back(velocity_scale.dstep);
     if(beam_factor1.vary) temp.push_back(beam_factor1.dstep);
     if(beam_factor2.vary) temp.push_back(beam_factor2.dstep);
@@ -1543,7 +1603,6 @@ Subs::Array1D<double> Lcurve::Model::get_dstep() const {
     if(slope.vary) temp.push_back(slope.dstep);
     if(quad.vary) temp.push_back(quad.dstep);
     if(cube.vary) temp.push_back(cube.dstep);
-    if(third.vary) temp.push_back(third.dstep);
 
     if(add_disc){
         if(rdisc1.vary) temp.push_back(rdisc1.dstep);
@@ -1638,12 +1697,14 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "iangle         = " << model.iangle         << "\n";
     s << "r1             = " << model.r1             << "\n";
     s << "r2             = " << model.r2             << "\n";
+    s << "r3             = " << model.r3             << "\n";
     s << "cphi3          = " << model.cphi3          << "\n";
     s << "cphi4          = " << model.cphi4          << "\n";
     s << "spin1          = " << model.spin1          << "\n";
     s << "spin2          = " << model.spin2          << "\n";
     s << "t1             = " << model.t1             << "\n";
     s << "t2             = " << model.t2             << "\n";
+    s << "t3             = " << model.t3             << "\n";
     s << "ldc1_1         = " << model.ldc1_1         << "\n";
     s << "ldc1_2         = " << model.ldc1_2         << "\n";
     s << "ldc1_3         = " << model.ldc1_3         << "\n";
@@ -1652,6 +1713,10 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "ldc2_2         = " << model.ldc2_2         << "\n";
     s << "ldc2_3         = " << model.ldc2_3         << "\n";
     s << "ldc2_4         = " << model.ldc2_4         << "\n";
+    s << "ldc3_1         = " << model.ldc3_1         << "\n";
+    s << "ldc3_2         = " << model.ldc3_2         << "\n";
+    s << "ldc3_3         = " << model.ldc3_3         << "\n";
+    s << "ldc3_4         = " << model.ldc3_4         << "\n";
     s << "velocity_scale = " << model.velocity_scale << "\n";
     s << "beam_factor1   = " << model.beam_factor1    << "\n";
     s << "beam_factor2   = " << model.beam_factor2    << "\n\n";
@@ -1662,11 +1727,10 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "deltat         = " << model.deltat         << "\n";
     s << "gravity_dark1  = " << model.gravity_dark1  << "\n";
     s << "gravity_dark2  = " << model.gravity_dark2  << "\n";
-    s << "absorb         = " << model.absorb         << "\n";
-    s << "slope          = " << model.slope          << "\n\n";
-    s << "quad           = " << model.quad           << "\n\n";
+    s << "absorb         = " << model.absorb         << "\n\n";
+    s << "slope          = " << model.slope          << "\n";
+    s << "quad           = " << model.quad           << "\n";
     s << "cube           = " << model.cube           << "\n\n";
-    s << "third          = " << model.third          << "\n\n";
 
     s << "rdisc1         = " << model.rdisc1         << "\n";
     s << "rdisc2         = " << model.rdisc2         << "\n";
@@ -1760,6 +1824,11 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     }else if(model.limb2 == LDC::CLARET){
         s << "limb2          = Claret\n";
     }
+    if(model.limb3 == "Poly"){
+        s << "limb3          = Poly\n";
+    }else if(model.limb3 == "Claret"){
+        s << "limb3          = Claret\n";
+    }
     s << "mirror         = " << model.mirror         << "\n";
     s << "add_disc       = " << model.add_disc       << "\n";
     s << "nrad           = " << model.nrad           << "\n";
@@ -1768,6 +1837,7 @@ std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
     s << "nspot          = " << model.nspot          << "\n";
     s << "iscale         = " << model.iscale         << "\n";
     s << "finite_irr12   = " << model.finite_irr12   << "\n";
+    s << "third          = " << model.third          << "\n";
     return s;
 }
 
