@@ -65,7 +65,7 @@ The [Subs::planck.cc](https://github.com/trmrsh/cpp-subs/blob/master/src/planck.
 
 I've updated the formula (and its derivative) used by the function $\texttt{Subs::planck()}$ to ensure that the correct blackbody shape is used when building light curves. The correction applied is:
 
-$$\frac{hc}{\lambda^3}\left(\exp{\left(\frac{hc}{\lambda KT}\right)}-1\right)^{-1}\longrightarrow\frac{2hc^2}{\lambda^5}\left(\exp{\left(\frac{hc}{\lambda kT}\right)}-1\right)^{-1}$$
+$$\frac{2hc}{\lambda^3}\left(\exp{\left(\frac{hc}{\lambda KT}\right)}-1\right)^{-1}\longrightarrow\frac{2hc^2}{\lambda^5}\left(\exp{\left(\frac{hc}{\lambda kT}\right)}-1\right)^{-1}$$
 
 These corrections have a significant effect on the shape of the blackbody curve used to obtain specific intensity, which may significantly affect the relative flux contributions from different components in a single model light curve (shapes of eclipse depths, irradiation amplitudes, etc).
 
