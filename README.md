@@ -48,10 +48,10 @@ I've added a new optional parameter to the parameters.txt file named "filter", w
 $$
 \frac{
 \sum\limits_{i=1}^{N}
-B_{\lambda}(\lambda_i,T)\ \cdot R(\lambda_i)\ \cdot \Delta\lambda
+B_{\lambda}(\lambda_i,T)\ \cdot R(\lambda_i)\ \cdot \lambda \cdot \Delta\lambda
 }{
 \sum\limits_{i=1}^{N}
-R(\lambda_i)\ \cdot \Delta\lambda
+R(\lambda_i)\ \cdot \lambda \cdot \Delta\lambda
 }
 $$
 
