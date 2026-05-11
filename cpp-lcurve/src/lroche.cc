@@ -362,9 +362,9 @@ Subs::Buffer1D<double> Lcurve::Fobj::scale_min;
 int main(int argc, char* argv[]){
 
     try{
-       std::cout << "lroche.cc recompiled on "
-                 << __DATE__ << " at "
-                 << __TIME__ << std::endl;
+//        std::cout << "lroche.cc recompiled on "
+//                  << __DATE__ << " at "
+//                  << __TIME__ << std::endl;
 
 
         // Construct Input object
