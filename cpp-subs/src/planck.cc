@@ -1,7 +1,7 @@
 #include "trm/subs.h"
 #include "trm/constants.h"
 
-/** Computes the Planck function Bnu = (2 h \nu^3/c^2)/(exp(h \nu/kT) - 1)
+/** Computes the Planck function B_lambda = (2 h c^2 / lambda*5)/(exp(h \nu/kT) - 1)
  *  as a function of wavelength and temperature. Output units are W/m**2/Hz/sr.
  *
  * \param wave wavelength in nanometres
@@ -17,7 +17,9 @@ double Subs::planck(double wave, double temp){
     double lambda = wave * 1e-9; // Convert to meters (parameters.txt uses nanometers)
 
     double x = (h * c) / (lambda * k * temp);
-    double prefactor = (2.0 * h * c * c) / pow(lambda, 5);
+    
+    double lambda2 = lambda * lambda;
+    double prefactor = (2.0 * h * c * c) / (lambda2 * lambda2 * lambda);
 
     if(x > 40.0){
         return prefactor * exp(-x);
@@ -28,7 +30,6 @@ double Subs::planck(double wave, double temp){
 
 
 /** Computes the logarithmic derivative of the Planck function 
- * Bnu wrt wavelength (i.e. d ln(Bnu) / d ln(lambda)) as a function of wavelength and temperature
  * \param wave wavelength in nanometres
  * \param temp temperature in K
  */
@@ -97,15 +98,14 @@ void Subs::integrate_filter(const std::vector<double>& temperature_array, std::v
 
         for(size_t k=0; k < lambda.size()-1; ++k){
             double dlambda = lambda[k+1] - lambda[k];
+            double lambda_avg = (lambda[k+1] + lambda[k]) / 2.0;
             double R_avg = 0.5 * (R[k] + R[k+1]);
             double B_avg = 0.5 * (Subs::planck(lambda[k], T) + Subs::planck(lambda[k+1], T));
 
-            numerator += B_avg * R_avg * dlambda;
-            denominator += R_avg * dlambda;
+            numerator += B_avg * R_avg * lambda_avg * dlambda;
+            denominator += R_avg * lambda_avg * dlambda;
         }
-
         planck_array[t] = numerator / denominator;
-        
     }
     
 }
