@@ -262,7 +262,9 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // Adjust intrinsic temperature based on local gravity darkening
             double T_intrinsic = t2 * pow(double(star2[i].gravity), GDCBOL2);
             double F2_intrinsic = Constants::SIGMA * std::pow(T_intrinsic, 4); // Bolometric blackbody flux for star2 surface element
+                                                                               // Units: W / m^2
 
+            
             // Begin loop over star1's elements for finite irradiation
             double F12_irradiation = 0.0; // Total sum of all incoming flux from star1 irradiating star2 surface element.
             for(int j=0; j<nelem1; j++){
@@ -279,11 +281,14 @@ void Lcurve::set_star_continuum(const Model& mdl,
                 // Only include contribution if both elements face each other (ignores edge cases like rotation/beaming)
                 if(mu1 > 0.0 && mu2 > 0.0){
 
-                    // Limb darkening and geometric dilution apply to specific intensity, so calculate star1 surface element bolometric intensity
+                    // Limb darkening and geometric dilution apply to specific intensity,
+                    //     so calculate star1 surface element bolometric intensity.
                     double star1j_intensity_bolometric = Constants::SIGMA * std::pow(star1[j].temp, 4) / Constants::PI;
-                    // Bolometric intensity Units: erg / s / cm^2  / sr
+                    // Bolometric intensity (integrated over all wavelengths).
+                    // Units: W / m^2  / sr
 
-                    star1j_intensity_bolometric *= ldc1.imu(mu1);  // Correct the intensity for limb darkening using the viewing angle towards the star2 surface element.
+                    // Correct the intensity for limb darkening using the viewing angle towards the star2 surface element.
+                    star1j_intensity_bolometric *= ldc1.imu(mu1); 
                                                         // This uses user-input (filter integrated) limb darkening coefficients
                                                         // Ideally, we'd use bolometric limb darkening, but this will have to do for now.
                                                         // This line assumes the LDC coefficients are normalized such that flux is conserved. Claret+2020 seems to be.
@@ -301,13 +306,14 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // Then (1 - mdl.absorb) is the fraction of incident bolometric intensity that is reflected (only 1/pi of this reflected light reaches the observer)
             double T2_eff = pow((F2_intrinsic + mdl.absorb*F12_irradiation)/Constants::SIGMA, 0.25);
 
-            // Finally convert bolometric values into filter-integrated or single-wavelength values by using the Plank function.
+            // Finally convert bolometric values into "filter-integrated" or single-wavelength values by using the Plank function.
+            // Units: W / m^3
             double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T2_eff) : Subs::planck(mdl.wavelength, T2_eff);
 
             // Define a "flux" (not actually flux) used to estimate total light from the system later.
-            star2[i].flux = star2[i].area * planck_value2; // Units: erg / s / Hz / sr
+            star2[i].flux = star2[i].area * planck_value2; // Units: W / m
 
-            // TODO: Reflection, handled by using (1.0 - mdl.absorb). Uses spectrum(temperature) of star1.
+            // TODO: Reflection, handled by using (1.0 - mdl.absorb). Uses spectrum(temperature) of star1 with a scale_factor I_filter/I_bolometric
                         
         }else{ // Original behavior: treat star1 as a point source without starspots. This is perfectly fine unless starspots affect irradiation.
 
