@@ -67,8 +67,8 @@ Previously, the Planck function used $B_\nu$, which would not integrate over wav
 
 ### 6) Updated how Third Light is handled:
 
-The original code treats third light as a hard-coded single-value "flux" added directly to the total system "flux", while this was a fitted parameter, it meant using different values for each filter. I've updated the code to treat third light as a third stellar blackbody with temperature (parameter t3) and scaled radius (parameter r3) at the same distance as the inner binary being modeled. The original $\texttt{third}$ parameter has been replaced with a boolean flag (1/0) to enable/disable this extra component.
+The original code treats third light as a hard-coded single-value "flux" added directly to the total system "flux". While this was a fitted parameter, it meant using different values for each filter. I've updated the code to treat third light as a third stellar blackbody with temperature (parameter t3) and scaled radius (parameter r3) at the same distance as the inner binary being modeled. The original $\texttt{third}$ parameter has been replaced with a boolean flag (1/0) to enable/disable this extra component.
 
-This third body is treated as a point source and its flux is added to the total system flux based on its radius and temperature parameters: $F_3 = \pi R_3^2 B_\lambda(\lambda,T) \cdot LDC3$
+This third body is treated as a point source and its flux is added to the total system flux based on its radius and temperature parameters: $F_3 = \pi R_3^2 B_\lambda(\lambda,T_3) \cdot LDC3$
 
 Additional parameters for limb darkening have been included for this third component: (ldc3_1, ldc3_2, ldc3_3, ldc3_4) and limb3. These have the same representation as limb darkening parameters used for star1 and star2, but are applied using the disc-averaged equations for the Claret 4-parameter and Polynomial limb darkening equations.
