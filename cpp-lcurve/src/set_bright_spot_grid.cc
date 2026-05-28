@@ -76,7 +76,7 @@ void Lcurve::set_bright_spot_grid(const Model& mdl,
     Lcurve::Point::etype eclipses;
 
     // This is where the spot height gets in
-    const double AREA   = SFAC*mdl.length_spot*mdl.height_spot/(mdl.nspot-1);
+    const double AREA = SFAC*mdl.length_spot*mdl.height_spot/(mdl.nspot-1);
 
     double planck_value_spot = integrate_filter ? Subs::interp1d(temperature_array, planck_array, mdl.temp_spot) : Subs::planck(mdl.wavelength, mdl.temp_spot);
     const double BRIGHT = planck_value_spot;
@@ -101,7 +101,7 @@ void Lcurve::set_bright_spot_grid(const Model& mdl,
         // the parallel strip
         spot[mdl.nspot+i]      = Lcurve::Point(posn, pvec, AREA, 1., eclipses);
         spot[mdl.nspot+i].flux = bright*mdl.cfrac_spot*spot[i].area;
-
+        
     }
 }
 
