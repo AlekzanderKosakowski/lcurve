@@ -11,7 +11,6 @@ namespace py = pybind11;
 
 // This is a wrapper for very specific parts of lcurve to be accessed from python
 // It includes the Lcurve::Model class, but not all of the methods inside
-//   It only include the methods we define here, such as get_params, set_params, compute_chisq()
 class LCurveWrapper {
 public:
     std::unique_ptr<Lcurve::Model> model_;
@@ -93,6 +92,13 @@ public:
         return *model_;
     }
 
+    // Write the model parameters to a new parameters.txt file.
+    void write_to_parameter_file(const std::string& ofilename) {
+        if (!model_) {
+            throw std::runtime_error("model_ is null");
+        }
+        model_->wrasc(ofilename);    
+    }
 
     // Update the values for the variable parameters in bulk
     // Provide a list of floats for each parameter (order matters)
@@ -127,7 +133,7 @@ public:
     std::vector<double> compute_chisq() {
         py::gil_scoped_release release;
         try {
-            double wdwarf, chisq, wnok, logg1, logg2, rv1, rv2;
+            double wdwarf, chisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2;
 
             constexpr bool scale = true;        // autoscale
             constexpr bool do_copy = false;     // no copy data
@@ -136,7 +142,7 @@ public:
             // Call TRM light curve computation
             Lcurve::light_curve_comp(*model_, *data_, scale, do_copy, add_noise,
                                      sfac_, fit_, wdwarf, chisq, wnok,
-                                     logg1, logg2, rv1, rv2);
+                                     logg1, logg2, rv1, rv2, ffac1, ffac2);
 
             return {chisq, logg2, logg1, wdwarf};
         }
@@ -211,12 +217,14 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("iangle", &Lcurve::Model::iangle)
         .def_readwrite("r1", &Lcurve::Model::r1)
         .def_readwrite("r2", &Lcurve::Model::r2)
+        .def_readwrite("r3", &Lcurve::Model::r3)
         .def_readwrite("cphi3", &Lcurve::Model::cphi3)
         .def_readwrite("cphi4", &Lcurve::Model::cphi4)
         .def_readwrite("spin1", &Lcurve::Model::spin1)
         .def_readwrite("spin2", &Lcurve::Model::spin2)
         .def_readwrite("t1", &Lcurve::Model::t1)
         .def_readwrite("t2", &Lcurve::Model::t2)
+        .def_readwrite("t3", &Lcurve::Model::t3)
         .def_readwrite("ldc1_1", &Lcurve::Model::ldc1_1)
         .def_readwrite("ldc1_2", &Lcurve::Model::ldc1_2)
         .def_readwrite("ldc1_3", &Lcurve::Model::ldc1_3)
@@ -225,6 +233,10 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("ldc2_2", &Lcurve::Model::ldc2_2)
         .def_readwrite("ldc2_3", &Lcurve::Model::ldc2_3)
         .def_readwrite("ldc2_4", &Lcurve::Model::ldc2_4)
+        .def_readwrite("ldc3_1", &Lcurve::Model::ldc3_1)
+        .def_readwrite("ldc3_2", &Lcurve::Model::ldc3_2)
+        .def_readwrite("ldc3_3", &Lcurve::Model::ldc3_3)
+        .def_readwrite("ldc3_4", &Lcurve::Model::ldc3_4)
         .def_readwrite("velocity_scale", &Lcurve::Model::velocity_scale)
         .def_readwrite("beam_factor1", &Lcurve::Model::beam_factor1)
         .def_readwrite("beam_factor2", &Lcurve::Model::beam_factor2)
@@ -238,7 +250,6 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("slope", &Lcurve::Model::slope)
         .def_readwrite("quad", &Lcurve::Model::quad)
         .def_readwrite("cube", &Lcurve::Model::cube)
-        .def_readwrite("third", &Lcurve::Model::third)
         .def_readwrite("rdisc1", &Lcurve::Model::rdisc1)
         .def_readwrite("rdisc2", &Lcurve::Model::rdisc2)
         .def_readwrite("height_disc", &Lcurve::Model::height_disc)
@@ -281,13 +292,15 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("stsp22_tcen", &Lcurve::Model::stsp22_tcen)
         .def_readwrite("stsp1i_long", &Lcurve::Model::stsp1i_long)
         .def_readwrite("stsp1i_lat", &Lcurve::Model::stsp1i_lat)
-        .def_readwrite("stsp1i_fwhm_lat", &Lcurve::Model::stsp1i_fwhm_lat)
         .def_readwrite("stsp1i_fwhm_long1", &Lcurve::Model::stsp1i_fwhm_long1)
         .def_readwrite("stsp1i_fwhm_long2", &Lcurve::Model::stsp1i_fwhm_long2)
+        .def_readwrite("stsp1i_fwhm_lat", &Lcurve::Model::stsp1i_fwhm_lat)
         .def_readwrite("stsp1i_tcen", &Lcurve::Model::stsp1i_tcen)
         .def_readonly("add_spot", &Lcurve::Model::add_spot)
-        .def_readonly("add_disc", &Lcurve::Model::add_disc);
-    
+        .def_readonly("add_disc", &Lcurve::Model::add_disc)
+        .def_readwrite("finite_irr12", &Lcurve::Model::finite_irr12)
+        .def_readwrite("third", &Lcurve::Model::third);
+
     py::class_<LCurveWrapper>(m, "LCurveModel")
         .def(py::init<const std::string&, const std::string&>(),
              py::arg("model_file"),
@@ -298,6 +311,7 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def("get_param_names", &LCurveWrapper::get_param_names)
         .def("get_model", &LCurveWrapper::get_model, py::return_value_policy::reference)
         .def("nvary", &LCurveWrapper::nvary)
-        .def("clone", &LCurveWrapper::clone);
+        .def("clone", &LCurveWrapper::clone)
+        .def("write_to_parameter_file", &LCurveWrapper::write_to_parameter_file);
 }
 
