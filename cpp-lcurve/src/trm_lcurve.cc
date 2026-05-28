@@ -358,11 +358,11 @@ Lcurve::Model::Model(const std::string& file) {
         if(!(names["stsp1i_fwhm_long1"] && names["stsp1i_fwhm_long2"] && names["stsp1i_fwhm_lat"] && names["stsp1i_long"] && names["stsp1i_lat"] && names["stsp1i_tcen"])){
         	throw Lcurve_Error("One or more of impact star spot parameters were not initialised");
         }
+        stsp1i_long = Pparam(pv["stsp1i_long"]);
+        stsp1i_lat = Pparam(pv["stsp1i_lat"]);
         stsp1i_fwhm_long1 = Pparam(pv["stsp1i_fwhm_long1"]);
         stsp1i_fwhm_long2 = Pparam(pv["stsp1i_fwhm_long2"]);
         stsp1i_fwhm_lat = Pparam(pv["stsp1i_fwhm_lat"]);
-        stsp1i_long = Pparam(pv["stsp1i_long"]);
-        stsp1i_lat = Pparam(pv["stsp1i_lat"]);
         stsp1i_tcen = Pparam(pv["stsp1i_tcen"]);
     }
 
@@ -526,11 +526,11 @@ int Lcurve::Model::nvary() const {
     if(stsp22_fwhm.defined && stsp22_fwhm.vary) n++;
     if(stsp22_tcen.defined && stsp22_tcen.vary) n++;
     
+    if(stsp1i_long.defined && stsp1i_long.vary) n++;
+    if(stsp1i_lat.defined && stsp1i_lat.vary) n++;
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) n++;
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) n++;
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) n++;
-    if(stsp1i_long.defined && stsp1i_long.vary) n++;
-    if(stsp1i_lat.defined && stsp1i_lat.vary) n++;
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) n++;
     
     return n;
@@ -634,11 +634,11 @@ void Lcurve::Model::set_param(const Subs::Array1D<double>& vpar) {
     if(stsp22_fwhm.defined && stsp22_fwhm.vary) stsp22_fwhm.value = vpar[n++];
     if(stsp22_tcen.defined && stsp22_tcen.vary) stsp22_tcen.value = vpar[n++];
 
+    if(stsp1i_long.defined && stsp1i_long.vary) stsp1i_long.value = vpar[n++];
+    if(stsp1i_lat.defined && stsp1i_lat.vary) stsp1i_lat.value = vpar[n++];
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) stsp1i_fwhm_long1.value = vpar[n++];
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) stsp1i_fwhm_long2.value = vpar[n++];
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) stsp1i_fwhm_lat.value = vpar[n++];
-    if(stsp1i_long.defined && stsp1i_long.vary) stsp1i_long.value = vpar[n++];
-    if(stsp1i_lat.defined && stsp1i_lat.vary) stsp1i_lat.value = vpar[n++];
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) stsp1i_tcen.value = vpar[n++];
 }
 
@@ -870,16 +870,16 @@ std::string Lcurve::Model::get_name(int i) const {
     if(stsp22_tcen.defined && stsp22_tcen.vary) n++;
     if(n == i) return "stsp22_tcen";
     
+    if(stsp1i_long.defined && stsp1i_long.vary) n++;
+    if(n == i) return "stsp1i_long";
+    if(stsp1i_lat.defined && stsp1i_lat.vary) n++;
+    if(n == i) return "stsp1i_lat";
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) n++;
     if(n == i) return "stsp1i_fwhm_long1";
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) n++;
     if(n == i) return "stsp1i_fwhm_long2";
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) n++;
     if(n == i) return "stsp1i_fwhm_lat";
-    if(stsp1i_long.defined && stsp1i_long.vary) n++;
-    if(n == i) return "stsp1i_long";
-    if(stsp1i_lat.defined && stsp1i_lat.vary) n++;
-    if(n == i) return "stsp1i_lat";
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) n++;
     if(n == i) return "stsp1i_tcen";
 
@@ -920,6 +920,11 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
             n++;
         }
 
+        if(r3.vary) {
+            if(vpar[n] <= 0.) return true;
+            n++;
+        }
+
     }else{
 
         if(cphi3.vary) {
@@ -932,7 +937,10 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
             n++;
         }
     }
-
+    if(spin1.vary) {
+        if(vpar[n] <= 0. || vpar[n] > 1000.) return true;
+        n++;
+    }
     if(spin1.vary) {
         if(vpar[n] <= 0. || vpar[n] > 1000.) return true;
         n++;
@@ -994,6 +1002,31 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
     }
 
     if(ldc2_4.vary){
+        if(vpar[n] < -1. || vpar[n] > 1.) return true;
+        n++;
+    }
+
+    if(ldc1_4.vary){
+        if(vpar[n] < -1. || vpar[n] > 1.) return true;
+        n++;
+    }
+
+    if(ldc3_1.vary){
+        if(vpar[n] < -1. || vpar[n] > 1.) return true;
+        n++;
+    }
+
+    if(ldc3_2.vary){
+        if(vpar[n] < -1. || vpar[n] > 1.) return true;
+        n++;
+    }
+
+    if(ldc3_3.vary){
+        if(vpar[n] < -1. || vpar[n] > 1.) return true;
+        n++;
+    }
+
+    if(ldc3_4.vary){
         if(vpar[n] < -1. || vpar[n] > 1.) return true;
         n++;
     }
@@ -1239,7 +1272,17 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
         if(vpar[n] <= 0.) return true;
         n++;
     }
-    
+
+    if(stsp1i_long.defined && stsp1i_long.vary) {
+      if(vpar[n] <= 0.) return true;
+      n++;
+    }
+
+    if(stsp1i_lat.defined && stsp1i_lat.vary) {
+      if(vpar[n] <= 0.) return true;
+      n++;
+    }
+
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) {
       if(vpar[n] < -360. || vpar[n] > 360.) return true;
       n++;
@@ -1255,16 +1298,6 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
       n++;
     }
     
-    if(stsp1i_long.defined && stsp1i_long.vary) {
-      if(vpar[n] <= 0.) return true;
-      n++;
-    }
-
-    if(stsp1i_lat.defined && stsp1i_lat.vary) {
-      if(vpar[n] <= 0.) return true;
-      n++;
-    }
-
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) {
       if(vpar[n] <= 0.) return true;
       n++;
@@ -1397,16 +1430,16 @@ Subs::Array1D<double> Lcurve::Model::get_param() const {
     if(stsp22_tcen.defined && stsp22_tcen.vary)
         temp.push_back(stsp22_tcen.value);
     
+    if(stsp1i_long.defined && stsp1i_long.vary) 
+      temp.push_back(stsp1i_long.value);
+    if(stsp1i_lat.defined && stsp1i_lat.vary) 
+      temp.push_back(stsp1i_lat.value);
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary)
       temp.push_back(stsp1i_fwhm_long1.value);
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) 
       temp.push_back(stsp1i_fwhm_long2.value);
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) 
       temp.push_back(stsp1i_fwhm_lat.value);
-    if(stsp1i_long.defined && stsp1i_long.vary) 
-      temp.push_back(stsp1i_long.value);
-    if(stsp1i_lat.defined && stsp1i_lat.vary) 
-      temp.push_back(stsp1i_lat.value);
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) 
       temp.push_back(stsp1i_tcen.value);
 
@@ -1536,16 +1569,16 @@ Subs::Array1D<double> Lcurve::Model::get_range() const {
     if(stsp22_tcen.defined && stsp22_tcen.vary)
         temp.push_back(stsp22_tcen.range);
     
+    if(stsp1i_long.defined && stsp1i_long.vary) 
+      temp.push_back(stsp1i_long.range);
+    if(stsp1i_lat.defined && stsp1i_lat.vary) 
+      temp.push_back(stsp1i_lat.range);
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary)
       temp.push_back(stsp1i_fwhm_long1.range);
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) 
       temp.push_back(stsp1i_fwhm_long2.range);
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) 
       temp.push_back(stsp1i_fwhm_lat.range);
-    if(stsp1i_long.defined && stsp1i_long.vary) 
-      temp.push_back(stsp1i_long.range);
-    if(stsp1i_lat.defined && stsp1i_lat.vary) 
-      temp.push_back(stsp1i_lat.range);
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) 
       temp.push_back(stsp1i_tcen.range);
 
@@ -1675,16 +1708,16 @@ Subs::Array1D<double> Lcurve::Model::get_dstep() const {
     if(stsp22_tcen.defined && stsp22_tcen.vary)
         temp.push_back(stsp22_tcen.dstep);
     
+    if(stsp1i_long.defined && stsp1i_long.vary) 
+      temp.push_back(stsp1i_long.dstep);
+    if(stsp1i_lat.defined && stsp1i_lat.vary) 
+      temp.push_back(stsp1i_lat.dstep);
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary)
       temp.push_back(stsp1i_fwhm_long1.dstep);
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) 
       temp.push_back(stsp1i_fwhm_long2.dstep);
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) 
       temp.push_back(stsp1i_fwhm_lat.dstep);
-    if(stsp1i_long.defined && stsp1i_long.vary) 
-      temp.push_back(stsp1i_long.dstep);
-    if(stsp1i_lat.defined && stsp1i_lat.vary) 
-      temp.push_back(stsp1i_lat.dstep);
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) 
       temp.push_back(stsp1i_tcen.dstep);
     
@@ -1693,151 +1726,151 @@ Subs::Array1D<double> Lcurve::Model::get_dstep() const {
 
 /** Outputs the current values of the model parameters */
 std::ostream& Lcurve::operator<<(std::ostream& s, const Model& model){
-    s << "q              = " << model.q              << "\n";
-    s << "iangle         = " << model.iangle         << "\n";
-    s << "r1             = " << model.r1             << "\n";
-    s << "r2             = " << model.r2             << "\n";
-    s << "r3             = " << model.r3             << "\n";
-    s << "cphi3          = " << model.cphi3          << "\n";
-    s << "cphi4          = " << model.cphi4          << "\n";
-    s << "spin1          = " << model.spin1          << "\n";
-    s << "spin2          = " << model.spin2          << "\n";
-    s << "t1             = " << model.t1             << "\n";
-    s << "t2             = " << model.t2             << "\n";
-    s << "t3             = " << model.t3             << "\n";
-    s << "ldc1_1         = " << model.ldc1_1         << "\n";
-    s << "ldc1_2         = " << model.ldc1_2         << "\n";
-    s << "ldc1_3         = " << model.ldc1_3         << "\n";
-    s << "ldc1_4         = " << model.ldc1_4         << "\n";
-    s << "ldc2_1         = " << model.ldc2_1         << "\n";
-    s << "ldc2_2         = " << model.ldc2_2         << "\n";
-    s << "ldc2_3         = " << model.ldc2_3         << "\n";
-    s << "ldc2_4         = " << model.ldc2_4         << "\n";
-    s << "ldc3_1         = " << model.ldc3_1         << "\n";
-    s << "ldc3_2         = " << model.ldc3_2         << "\n";
-    s << "ldc3_3         = " << model.ldc3_3         << "\n";
-    s << "ldc3_4         = " << model.ldc3_4         << "\n";
-    s << "velocity_scale = " << model.velocity_scale << "\n";
-    s << "beam_factor1   = " << model.beam_factor1    << "\n";
-    s << "beam_factor2   = " << model.beam_factor2    << "\n\n";
+    s << "q                 = " << model.q              << "\n";
+    s << "iangle            = " << model.iangle         << "\n";
+    s << "r1                = " << model.r1             << "\n";
+    s << "r2                = " << model.r2             << "\n";
+    s << "r3                = " << model.r3             << "\n";
+    s << "cphi3             = " << model.cphi3          << "\n";
+    s << "cphi4             = " << model.cphi4          << "\n";
+    s << "spin1             = " << model.spin1          << "\n";
+    s << "spin2             = " << model.spin2          << "\n";
+    s << "t1                = " << model.t1             << "\n";
+    s << "t2                = " << model.t2             << "\n";
+    s << "t3                = " << model.t3             << "\n";
+    s << "ldc1_1            = " << model.ldc1_1         << "\n";
+    s << "ldc1_2            = " << model.ldc1_2         << "\n";
+    s << "ldc1_3            = " << model.ldc1_3         << "\n";
+    s << "ldc1_4            = " << model.ldc1_4         << "\n";
+    s << "ldc2_1            = " << model.ldc2_1         << "\n";
+    s << "ldc2_2            = " << model.ldc2_2         << "\n";
+    s << "ldc2_3            = " << model.ldc2_3         << "\n";
+    s << "ldc2_4            = " << model.ldc2_4         << "\n";
+    s << "ldc3_1            = " << model.ldc3_1         << "\n";
+    s << "ldc3_2            = " << model.ldc3_2         << "\n";
+    s << "ldc3_3            = " << model.ldc3_3         << "\n";
+    s << "ldc3_4            = " << model.ldc3_4         << "\n";
+    s << "velocity_scale    = " << model.velocity_scale << "\n";
+    s << "beam_factor1      = " << model.beam_factor1    << "\n";
+    s << "beam_factor2      = " << model.beam_factor2    << "\n\n";
 
-    s << "t0             = " << model.t0             << "\n";
-    s << "period         = " << model.period         << "\n";
-    s << "pdot           = " << model.pdot           << "\n";
-    s << "deltat         = " << model.deltat         << "\n";
-    s << "gravity_dark1  = " << model.gravity_dark1  << "\n";
-    s << "gravity_dark2  = " << model.gravity_dark2  << "\n";
-    s << "absorb         = " << model.absorb         << "\n\n";
-    s << "slope          = " << model.slope          << "\n";
-    s << "quad           = " << model.quad           << "\n";
-    s << "cube           = " << model.cube           << "\n\n";
+    s << "t0                = " << model.t0             << "\n";
+    s << "period            = " << model.period         << "\n";
+    s << "pdot              = " << model.pdot           << "\n";
+    s << "deltat            = " << model.deltat         << "\n";
+    s << "gravity_dark1     = " << model.gravity_dark1  << "\n";
+    s << "gravity_dark2     = " << model.gravity_dark2  << "\n";
+    s << "absorb            = " << model.absorb         << "\n\n";
+    s << "slope             = " << model.slope          << "\n";
+    s << "quad              = " << model.quad           << "\n";
+    s << "cube              = " << model.cube           << "\n\n";
 
-    s << "rdisc1         = " << model.rdisc1         << "\n";
-    s << "rdisc2         = " << model.rdisc2         << "\n";
-    s << "height_disc    = " << model.height_disc    << "\n";
-    s << "beta_disc      = " << model.beta_disc      << "\n";
-    s << "temp_disc      = " << model.temp_disc      << "\n";
-    s << "texp_disc      = " << model.texp_disc      << "\n";
-    s << "lin_limb_disc  = " << model.lin_limb_disc  << "\n";
-    s << "quad_limb_disc = " << model.quad_limb_disc << "\n";
-    s << "temp_edge      = " << model.temp_edge      << "\n";
-    s << "absorb_edge    = " << model.absorb_edge    << "\n\n";
+    s << "rdisc1            = " << model.rdisc1         << "\n";
+    s << "rdisc2            = " << model.rdisc2         << "\n";
+    s << "height_disc       = " << model.height_disc    << "\n";
+    s << "beta_disc         = " << model.beta_disc      << "\n";
+    s << "temp_disc         = " << model.temp_disc      << "\n";
+    s << "texp_disc         = " << model.texp_disc      << "\n";
+    s << "lin_limb_disc     = " << model.lin_limb_disc  << "\n";
+    s << "quad_limb_disc    = " << model.quad_limb_disc << "\n";
+    s << "temp_edge         = " << model.temp_edge      << "\n";
+    s << "absorb_edge       = " << model.absorb_edge    << "\n\n";
 
-    s << "radius_spot    = " << model.radius_spot    << "\n";
-    s << "length_spot    = " << model.length_spot    << "\n";
-    s << "height_spot    = " << model.height_spot    << "\n";
-    s << "expon_spot     = " << model.expon_spot     << "\n";
-    s << "epow_spot      = " << model.epow_spot      << "\n";
-    s << "angle_spot     = " << model.angle_spot     << "\n";
-    s << "yaw_spot       = " << model.yaw_spot       << "\n";
-    s << "temp_spot      = " << model.temp_spot      << "\n";
-    s << "tilt_spot      = " << model.tilt_spot      << "\n";
-    s << "cfrac_spot     = " << model.cfrac_spot     << "\n\n";
+    s << "radius_spot       = " << model.radius_spot    << "\n";
+    s << "length_spot       = " << model.length_spot    << "\n";
+    s << "height_spot       = " << model.height_spot    << "\n";
+    s << "expon_spot        = " << model.expon_spot     << "\n";
+    s << "epow_spot         = " << model.epow_spot      << "\n";
+    s << "angle_spot        = " << model.angle_spot     << "\n";
+    s << "yaw_spot          = " << model.yaw_spot       << "\n";
+    s << "temp_spot         = " << model.temp_spot      << "\n";
+    s << "tilt_spot         = " << model.tilt_spot      << "\n";
+    s << "cfrac_spot        = " << model.cfrac_spot     << "\n\n";
 
-    s << "stsp11_long    = " << model.stsp11_long    << "\n";
-    s << "stsp11_lat     = " << model.stsp11_lat     << "\n";
-    s << "stsp11_fwhm    = " << model.stsp11_fwhm    << "\n";
-    s << "stsp11_tcen    = " << model.stsp11_tcen    << "\n\n";
+    s << "stsp11_long       = " << model.stsp11_long    << "\n";
+    s << "stsp11_lat        = " << model.stsp11_lat     << "\n";
+    s << "stsp11_fwhm       = " << model.stsp11_fwhm    << "\n";
+    s << "stsp11_tcen       = " << model.stsp11_tcen    << "\n\n";
 
-    s << "stsp12_long    = " << model.stsp12_long    << "\n";
-    s << "stsp12_lat     = " << model.stsp12_lat     << "\n";
-    s << "stsp12_fwhm    = " << model.stsp12_fwhm    << "\n";
-    s << "stsp12_tcen    = " << model.stsp12_tcen    << "\n\n";
+    s << "stsp12_long       = " << model.stsp12_long    << "\n";
+    s << "stsp12_lat        = " << model.stsp12_lat     << "\n";
+    s << "stsp12_fwhm       = " << model.stsp12_fwhm    << "\n";
+    s << "stsp12_tcen       = " << model.stsp12_tcen    << "\n\n";
 
-    s << "stsp13_long    = " << model.stsp13_long    << "\n";
-    s << "stsp13_lat     = " << model.stsp13_lat     << "\n";
-    s << "stsp13_fwhm    = " << model.stsp13_fwhm    << "\n";
-    s << "stsp13_tcen    = " << model.stsp13_tcen    << "\n\n";
+    s << "stsp13_long       = " << model.stsp13_long    << "\n";
+    s << "stsp13_lat        = " << model.stsp13_lat     << "\n";
+    s << "stsp13_fwhm       = " << model.stsp13_fwhm    << "\n";
+    s << "stsp13_tcen       = " << model.stsp13_tcen    << "\n\n";
     
-    s << "stsp21_long    = " << model.stsp21_long    << "\n";
-    s << "stsp21_lat     = " << model.stsp21_lat     << "\n";
-    s << "stsp21_fwhm    = " << model.stsp21_fwhm    << "\n";
-    s << "stsp21_tcen    = " << model.stsp21_tcen    << "\n\n";
+    s << "stsp21_long       = " << model.stsp21_long    << "\n";
+    s << "stsp21_lat        = " << model.stsp21_lat     << "\n";
+    s << "stsp21_fwhm       = " << model.stsp21_fwhm    << "\n";
+    s << "stsp21_tcen       = " << model.stsp21_tcen    << "\n\n";
 
-    s << "stsp22_long    = " << model.stsp22_long    << "\n";
-    s << "stsp22_lat     = " << model.stsp22_lat     << "\n";
-    s << "stsp22_fwhm    = " << model.stsp22_fwhm    << "\n";
-    s << "stsp22_tcen    = " << model.stsp22_tcen    << "\n\n";
+    s << "stsp22_long       = " << model.stsp22_long    << "\n";
+    s << "stsp22_lat        = " << model.stsp22_lat     << "\n";
+    s << "stsp22_fwhm       = " << model.stsp22_fwhm    << "\n";
+    s << "stsp22_tcen       = " << model.stsp22_tcen    << "\n\n";
 
-    s << "stsp1i_long     = " << model.stsp1i_long   << "\n";
-    s << "stsp1i_lat      = " << model.stsp1i_lat   << "\n";
+    s << "stsp1i_long       = " << model.stsp1i_long   << "\n";
+    s << "stsp1i_lat        = " << model.stsp1i_lat   << "\n";
     s << "stsp1i_fwhm_long1 = " << model.stsp1i_fwhm_long1   << "\n";
     s << "stsp1i_fwhm_long2 = " << model.stsp1i_fwhm_long2   << "\n";
-    s << "stsp1i_fwhm_lat  = " << model.stsp1i_fwhm_lat   << "\n";
-    s << "stsp1i_tcen      = " << model.stsp1i_tcen    << "\n\n";
+    s << "stsp1i_fwhm_lat   = " << model.stsp1i_fwhm_lat   << "\n";
+    s << "stsp1i_tcen       = " << model.stsp1i_tcen    << "\n\n";
 
-    s << "delta_phase    = " << model.delta_phase    << "\n";
-    s << "nlat1f         = " << model.nlat1f         << "\n";
-    s << "nlat2f         = " << model.nlat2f         << "\n";
-    s << "nlat1c         = " << model.nlat1c         << "\n";
-    s << "nlat2c         = " << model.nlat2c         << "\n";
-    s << "npole          = " << model.npole          << "\n";
-    s << "nlatfill       = " << model.nlatfill       << "\n";
-    s << "nlngfill       = " << model.nlngfill       << "\n";
-    s << "lfudge         = " << model.lfudge         << "\n";
-    s << "llo            = " << model.llo            << "\n";
-    s << "lhi            = " << model.lhi            << "\n";
-    s << "phase1         = " << model.phase1         << "\n";
-    s << "phase2         = " << model.phase2         << "\n";
+    s << "delta_phase       = " << model.delta_phase    << "\n";
+    s << "nlat1f            = " << model.nlat1f         << "\n";
+    s << "nlat2f            = " << model.nlat2f         << "\n";
+    s << "nlat1c            = " << model.nlat1c         << "\n";
+    s << "nlat2c            = " << model.nlat2c         << "\n";
+    s << "npole             = " << model.npole          << "\n";
+    s << "nlatfill          = " << model.nlatfill       << "\n";
+    s << "nlngfill          = " << model.nlngfill       << "\n";
+    s << "lfudge            = " << model.lfudge         << "\n";
+    s << "llo               = " << model.llo            << "\n";
+    s << "lhi               = " << model.lhi            << "\n";
+    s << "phase1            = " << model.phase1         << "\n";
+    s << "phase2            = " << model.phase2         << "\n";
 
-    s << "wavelength     = " << model.wavelength     << "\n";
-    s << "filter         = " << model.filter         << "\n";
-    s << "roche1         = " << model.roche1         << "\n";
-    s << "roche2         = " << model.roche2         << "\n";
-    s << "eclipse1       = " << model.eclipse1       << "\n";
-    s << "eclipse2       = " << model.eclipse2       << "\n";
-    s << "glens1         = " << model.glens1         << "\n";
-    s << "use_radii      = " << model.use_radii      << "\n";
+    s << "wavelength        = " << model.wavelength     << "\n";
+    s << "filter            = " << model.filter         << "\n";
+    s << "roche1            = " << model.roche1         << "\n";
+    s << "roche2            = " << model.roche2         << "\n";
+    s << "eclipse1          = " << model.eclipse1       << "\n";
+    s << "eclipse2          = " << model.eclipse2       << "\n";
+    s << "glens1            = " << model.glens1         << "\n";
+    s << "use_radii         = " << model.use_radii      << "\n";
 
-    s << "tperiod        = " << model.tperiod        << "\n";
-    s << "gdark_bolom1   = " << model.gdark_bolom1   << "\n";
-    s << "gdark_bolom2   = " << model.gdark_bolom2   << "\n";
-    s << "mucrit1        = " << model.mucrit1        << "\n";
-    s << "mucrit2        = " << model.mucrit2        << "\n";
+    s << "tperiod           = " << model.tperiod        << "\n";
+    s << "gdark_bolom1      = " << model.gdark_bolom1   << "\n";
+    s << "gdark_bolom2      = " << model.gdark_bolom2   << "\n";
+    s << "mucrit1           = " << model.mucrit1        << "\n";
+    s << "mucrit2           = " << model.mucrit2        << "\n";
     if(model.limb1 == LDC::POLY){
-        s << "limb1          = Poly\n";
+        s << "limb1             = Poly\n";
     }else if(model.limb1 == LDC::CLARET){
-        s << "limb1          = Claret\n";
+        s << "limb1             = Claret\n";
     }
     if(model.limb2 == LDC::POLY){
-        s << "limb2          = Poly\n";
+        s << "limb2             = Poly\n";
     }else if(model.limb2 == LDC::CLARET){
-        s << "limb2          = Claret\n";
+        s << "limb2             = Claret\n";
     }
     if(model.limb3 == "Poly"){
-        s << "limb3          = Poly\n";
+        s << "limb3             = Poly\n";
     }else if(model.limb3 == "Claret"){
-        s << "limb3          = Claret\n";
+        s << "limb3             = Claret\n";
     }
-    s << "mirror         = " << model.mirror         << "\n";
-    s << "add_disc       = " << model.add_disc       << "\n";
-    s << "nrad           = " << model.nrad           << "\n";
-    s << "opaque         = " << model.opaque         << "\n";
-    s << "add_spot       = " << model.add_spot       << "\n";
-    s << "nspot          = " << model.nspot          << "\n";
-    s << "iscale         = " << model.iscale         << "\n";
-    s << "finite_irr12   = " << model.finite_irr12   << "\n";
-    s << "third          = " << model.third          << "\n";
+    s << "mirror            = " << model.mirror         << "\n";
+    s << "add_disc          = " << model.add_disc       << "\n";
+    s << "nrad              = " << model.nrad           << "\n";
+    s << "opaque            = " << model.opaque         << "\n";
+    s << "add_spot          = " << model.add_spot       << "\n";
+    s << "nspot             = " << model.nspot          << "\n";
+    s << "iscale            = " << model.iscale         << "\n";
+    s << "finite_irr12      = " << model.finite_irr12   << "\n";
+    s << "third             = " << model.third          << "\n";
     return s;
 }
 
@@ -1847,8 +1880,7 @@ void Lcurve::Model::wrasc(const std::string& file) const {
 
     std::ofstream fout(file.c_str());
     if(!fout)
-        throw Lcurve_Error("Lcurve::Model::wrasc: failed to open " +
-                           file + " for output.");
+        throw Lcurve_Error("Lcurve::Model::wrasc: failed to open " + file + " for output.");
 
     fout << *this;
     fout.close();
