@@ -82,7 +82,7 @@ void Lcurve::light_curve_comp(const Lcurve::Model& mdl,
     // Prepare filter curve integration
     double temperature_grid_min = 100.0;
     double temperature_grid_max = 100000.0;
-    double temperature_grid_step = 200.0;
+    double temperature_grid_step = 50.0;
     int N_temperatures = static_cast<int>(std::ceil((temperature_grid_max - temperature_grid_min)/temperature_grid_step)) + 1;
 
     std::vector<double> temperature_array(N_temperatures);
