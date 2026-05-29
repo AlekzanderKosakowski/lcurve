@@ -1274,27 +1274,27 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
     }
 
     if(stsp1i_long.defined && stsp1i_long.vary) {
-      if(vpar[n] <= 0.) return true;
+        if(vpar[n] < -400. || vpar[n] > 400.) return true;
       n++;
     }
 
     if(stsp1i_lat.defined && stsp1i_lat.vary) {
-      if(vpar[n] <= 0.) return true;
+      if(vpar[n] < -90. || vpar[n] > 90.) return true;
       n++;
     }
 
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) {
-      if(vpar[n] < -360. || vpar[n] > 360.) return true;
+      if(vpar[n] < 0. || vpar[n] > 180.) return true;
       n++;
     }
 
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) {
-      if(vpar[n] < -360. || vpar[n] > 720.) return true;
+      if(vpar[n] < 0. || vpar[n] > 180.) return true;
       n++;
     }
 
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) {
-      if(vpar[n] <= 0. || vpar[n] > 80.) return true;
+      if(vpar[n] <= 0. || vpar[n] > 180.) return true;
       n++;
     }
     
