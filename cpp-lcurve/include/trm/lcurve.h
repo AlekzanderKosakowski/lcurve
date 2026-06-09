@@ -531,14 +531,14 @@ namespace Lcurve {
     //! longitude of impact spot
     Pparam stsp1i_lat;
 
-    //! fwhm of impact spot in latitude direction
-    Pparam stsp1i_fwhm_lat;
-
     //! fwhm of impact spot in upstream longitude direction
     Pparam stsp1i_fwhm_long1;
 
     //! fwhm of impact spot in downstream longitude direction
     Pparam stsp1i_fwhm_long2;
+
+    //! fwhm of impact spot in latitude direction
+    Pparam stsp1i_fwhm_lat;
 
     //! temperature of impact spot center
     Pparam stsp1i_tcen;
