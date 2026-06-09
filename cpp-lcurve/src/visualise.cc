@@ -405,27 +405,18 @@ int main(int argc, char* argv[]){
             if(disc[i].flux < min_disc){min_disc = disc[i].flux;}
             if(disc[i].flux > max_disc){max_disc = disc[i].flux;}
         }
-        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
+        
+        // std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
         for(int i=0; i < outer_edge.size(); i++){
             if(outer_edge[i].flux < min_disc){min_disc = outer_edge[i].flux;}
             if(outer_edge[i].flux > max_disc){max_disc = outer_edge[i].flux;}
         }
-
-        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
+        // std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
         for(int i=0; i < inner_edge.size(); i++){
             if(inner_edge[i].flux < min_disc){min_disc = inner_edge[i].flux;}
             if(inner_edge[i].flux > max_disc){max_disc = inner_edge[i].flux;}
         }
-        std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
-
-
-        // Bright spot must be colored by "flux" since it does not have a physical temperature
-        double min_spot = 1e20, max_spot = 1e-20;       
-        for(int i=0; i < bspot.size(); i++){
-            if(bspot[i].flux < min_spot){min_spot = bspot[i].flux;}
-            if(bspot[i].flux > max_spot){max_spot = bspot[i].flux;}
-        }
-
+        // std::cout << std::setprecision(6) << "min_disc=" << min_disc << "  max_disc=" << max_disc << std::endl;
         
         // Plot
         Subs::Plot plot(device);
@@ -506,8 +497,17 @@ int main(int argc, char* argv[]){
                     max_disc,
                     colorscale, ncolors, -1);
             }
-
             if(model.add_spot){
+                Lcurve::set_bright_spot_grid(model, bspot, integrate_filter, temperature_array, planck_array);
+
+                // Bright spot must be colored by "flux" since it does not have a physical temperature
+                double min_spot = 1e20, max_spot = 1e-20;       
+                for(int i=0; i < bspot.size(); i++){
+                    if(bspot[i].flux < min_spot){min_spot = bspot[i].flux;}
+                    if(bspot[i].flux > max_spot){max_spot = bspot[i].flux;}
+                }
+                plot_visible(bspot, earth, cofm, xsky, ysky, phase, min_spot, max_spot, colorscale, ncolors, plt_marker);
+                
                 cpgsci(2);
                 plot_visible(stream, earth, cofm, xsky, ysky, phase,
                     min_spot,
