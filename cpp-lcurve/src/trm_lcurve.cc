@@ -892,10 +892,11 @@ std::string Lcurve::Model::get_name(int i) const {
  * \return true if not OK
  */
 bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
+
     if(nvary() != int(vpar.size()))
         throw Lcurve_Error("are_legal: conflicting numbers of variable parameters");
-    int n = 0;
-
+    int n = 0;    
+    
     if(q.vary) {
         if(vpar[n] <= 0. || vpar[n] > 100.) return true;
         n++;
@@ -920,11 +921,6 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
             n++;
         }
 
-        if(r3.vary) {
-            if(vpar[n] <= 0.) return true;
-            n++;
-        }
-
     }else{
 
         if(cphi3.vary) {
@@ -937,10 +933,12 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
             n++;
         }
     }
-    if(spin1.vary) {
-        if(vpar[n] <= 0. || vpar[n] > 1000.) return true;
+
+    if(r3.vary) {
+        if(vpar[n] <= 0.) return true;
         n++;
     }
+    
     if(spin1.vary) {
         if(vpar[n] <= 0. || vpar[n] > 1000.) return true;
         n++;
@@ -1002,11 +1000,6 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
     }
 
     if(ldc2_4.vary){
-        if(vpar[n] < -1. || vpar[n] > 1.) return true;
-        n++;
-    }
-
-    if(ldc1_4.vary){
         if(vpar[n] < -1. || vpar[n] > 1.) return true;
         n++;
     }
@@ -1275,32 +1268,32 @@ bool Lcurve::Model::is_not_legal(const Subs::Array1D<double>& vpar) const {
 
     if(stsp1i_long.defined && stsp1i_long.vary) {
         if(vpar[n] < -400. || vpar[n] > 400.) return true;
-      n++;
+        n++;
     }
 
     if(stsp1i_lat.defined && stsp1i_lat.vary) {
-      if(vpar[n] < -90. || vpar[n] > 90.) return true;
-      n++;
+        if(vpar[n] < -90. || vpar[n] > 90.) return true;
+        n++;
     }
 
     if(stsp1i_fwhm_long1.defined && stsp1i_fwhm_long1.vary) {
-      if(vpar[n] < 0. || vpar[n] > 180.) return true;
-      n++;
+        if(vpar[n] < 0. || vpar[n] > 180.) return true;
+        n++;
     }
 
     if(stsp1i_fwhm_long2.defined && stsp1i_fwhm_long2.vary) {
-      if(vpar[n] < 0. || vpar[n] > 180.) return true;
-      n++;
+        if(vpar[n] < 0. || vpar[n] > 180.) return true;
+        n++;
     }
 
     if(stsp1i_fwhm_lat.defined && stsp1i_fwhm_lat.vary) {
-      if(vpar[n] <= 0. || vpar[n] > 180.) return true;
-      n++;
+        if(vpar[n] <= 0. || vpar[n] > 180.) return true;
+        n++;
     }
     
     if(stsp1i_tcen.defined && stsp1i_tcen.vary) {
-      if(vpar[n] <= 0.) return true;
-      n++;
+        if(vpar[n] <= 0.) return true;
+        n++;
     }
     
     return false;
