@@ -32,6 +32,8 @@ void Lcurve::set_star_continuum(const Model& mdl,
                                 const LDC& ldc1, const LDC& ldc2
                                 ){
 
+    bool opaque_disc_enabled = mdl.add_disc && mdl.opaque;
+    
     double r1, r2;
     mdl.get_r1r2(r1, r2);
 
@@ -64,7 +66,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
     bool is_spot12 = mdl.stsp12_long.defined && mdl.stsp12_lat.defined && mdl.stsp12_fwhm.defined && mdl.stsp12_tcen.defined;
     bool is_spot13 = mdl.stsp13_long.defined && mdl.stsp13_lat.defined && mdl.stsp13_fwhm.defined && mdl.stsp13_tcen.defined;
     
-    bool is_spot1i = mdl.stsp1i_long.defined && mdl.stsp1i_lat.defined && mdl.stsp1i_fwhm_lat.defined && mdl.stsp1i_fwhm_long1.defined && mdl.stsp1i_fwhm_long2.defined && mdl.stsp1i_tcen.defined;
+    bool is_spot1i = mdl.stsp1i_long.defined && mdl.stsp1i_lat.defined && mdl.stsp1i_fwhm_lat.defined && mdl.stsp1i_fwhm_long.defined && mdl.stsp1i_escale_len.defined && mdl.stsp1i_tcen.defined;
     
     double clong11=0., slong11=0., clat11=0., slat11=0.;
     double clong12=0., slong12=0., clat12=0., slat12=0.;
@@ -125,7 +127,7 @@ void Lcurve::set_star_continuum(const Model& mdl,
         	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot13)/star1[i].posn.length()));
     	    t1 += (mdl.stsp13_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp13_fwhm/Constants::EFAC))/2.);
         }
-        if(is_spot1i && mdl.stsp1i_fwhm_long1 > 0 && mdl.stsp1i_fwhm_long2 > 0 && mdl.stsp1i_fwhm_lat > 0){
+        if(is_spot1i && mdl.stsp1i_fwhm_long > 0 && mdl.stsp1i_escale_len > 0 && mdl.stsp1i_fwhm_lat > 0){
             // Direct-impact starspot with approximate advective tail in the spin direction.
             
             // Latitude and longitudes all in radians here for trig calculations.
@@ -135,9 +137,9 @@ void Lcurve::set_star_continuum(const Model& mdl,
             double impact_longitude = Subs::deg2rad(mdl.stsp1i_long); // longitude of direct-impact spot center
             double impact_latitude = Subs::deg2rad(mdl.stsp1i_lat);
 
-            double fwhm_upstream   = Subs::deg2rad(mdl.stsp1i_fwhm_long1); // Gaussian decay of impact spot in longitude direction
-            double fwhm_downstream = Subs::deg2rad(mdl.stsp1i_fwhm_long2); // Exponential decay of advection tail
-            double fwhm_latitude   = Subs::deg2rad(mdl.stsp1i_fwhm_lat);   // Gaussian decay of impact spot in latitude direction
+            double fwhm_longitude = Subs::deg2rad(mdl.stsp1i_fwhm_long); // Gaussian decay of impact spot in longitude direction
+            double fwhm_latitude = Subs::deg2rad(mdl.stsp1i_fwhm_lat);   // Gaussian decay of impact spot in latitude direction
+            double advection_scale_length = Subs::deg2rad(mdl.stsp1i_escale_len); // Exponential decay of advection tail
             
             // Latitude calculations
             double latitude_offset = Subs::abs(impact_latitude - surface_latitude);
@@ -150,12 +152,12 @@ void Lcurve::set_star_continuum(const Model& mdl,
             bool spherical_correction = false; // Apply spherical correction to "fix" decay at high latitudes? (energy transport stuff?)
             double delta_phi_phys = spherical_correction ? delta_phi * std::cos(surface_latitude) : delta_phi;
             
-            double upstream_limit = -5.0 * fwhm_upstream / Constants::EFAC; // Hard cutoff at 5 sigma for "upstream" direction limits. All other longitudes are "downstream"
+            double upstream_limit = -5.0 * fwhm_longitude / Constants::EFAC; // Hard cutoff at 5 sigma for "upstream" direction limits. All other longitudes are "downstream"
             bool upstream = (delta_phi_phys >= upstream_limit) && (delta_phi_phys <= 0.0);
 
             double longitude_decay_term;
             if(upstream){
-                longitude_decay_term = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_upstream/Constants::EFAC))/2.);
+                longitude_decay_term = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_longitude/Constants::EFAC))/2.);
             }else{
                 double delta_phi_downstream = std::fmod(surface_longitude - impact_longitude, 2.0*Constants::PI);
                 if(delta_phi_downstream < 0.0){
@@ -163,9 +165,9 @@ void Lcurve::set_star_continuum(const Model& mdl,
                 }
                 double delta_phi_downstream_phys = spherical_correction ? delta_phi_downstream*std::cos(surface_latitude) : delta_phi_downstream;
                 
-                double fraction_core = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_upstream/Constants::EFAC))/2.);
-                double fraction_tail = std::exp(-delta_phi_downstream_phys/fwhm_downstream) * (1.0 - fraction_core);
-                longitude_decay_term = fraction_core + fraction_tail;
+                double core_contribution = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_longitude/Constants::EFAC))/2.);
+                double tail_contribution = std::exp(-delta_phi_downstream_phys/advection_scale_length) * (1.0 - core_contribution);
+                longitude_decay_term = core_contribution + tail_contribution; // Gaussian + Exponential - Gaussian*Exponential
             }
             t1 += (mdl.stsp1i_tcen - mdl.t1) * longitude_decay_term * latitude_decay_term;                
         }
@@ -235,9 +237,10 @@ void Lcurve::set_star_continuum(const Model& mdl,
         slat22  = std::sin(Subs::deg2rad(mdl.stsp22_lat.value));
     	spot22 = Subs::Vec3(clat22*clong22, clat22*slong22, slat22);
     }
-
+    
+    // std::cout << "========================" << std::endl;
+    // std::cout << "========================" << std::endl;
     for(int i=0; i<nelem2; i++){
-
         // Begin with a single temperature for all surface elements from the user model input.
         double t2 = Subs::abs(double(mdl.t2));
 
@@ -263,7 +266,8 @@ void Lcurve::set_star_continuum(const Model& mdl,
             double T_intrinsic = t2 * pow(double(star2[i].gravity), GDCBOL2);
             double F2_intrinsic = Constants::SIGMA * std::pow(T_intrinsic, 4); // Bolometric blackbody flux for star2 surface element
                                                                                // Units: W / m^2
-
+            // std::cout << std::setprecision(6) << "T2_intrinsic=" << T_intrinsic << std::endl;
+            // std::cout << std::setprecision(6) << "F2_intrinsic=" << F2_intrinsic << std::endl;
             
             // Begin loop over star1's elements for finite irradiation
             double F12_irradiation = 0.0; // Total sum of all incoming flux from star1 irradiating star2 surface element.
@@ -277,10 +281,14 @@ void Lcurve::set_star_continuum(const Model& mdl,
 
                 double mu1 = Subs::dot(star1[j].dirn, vec12) / r12; // Cosine of angle between star1 element normal and the direction to star2 element
                 double mu2 = Subs::dot(star2[i].dirn, vec21) / r21; // Cosine of angle between star2 element normal and the direction to star1 element
-        
+                
                 // Only include contribution if both elements face each other (ignores edge cases like rotation/beaming)
                 if(mu1 > 0.0 && mu2 > 0.0){
 
+                    if(opaque_disc_enabled && disc_blocks_ray(star1[j], vec12, mdl)){
+                        continue;
+                    }
+                    
                     // Limb darkening and geometric dilution apply to specific intensity,
                     //     so calculate star1 surface element bolometric intensity.
                     double star1j_intensity_bolometric = Constants::SIGMA * std::pow(star1[j].temp, 4) / Constants::PI;
@@ -306,15 +314,19 @@ void Lcurve::set_star_continuum(const Model& mdl,
             // Then (1 - mdl.absorb) is the fraction of incident bolometric intensity that is reflected (only 1/pi of this reflected light reaches the observer)
             double T2_eff = pow((F2_intrinsic + mdl.absorb*F12_irradiation)/Constants::SIGMA, 0.25);
 
+            // std::cout << std::setprecision(6) << "T2_eff=" << T2_eff << std::endl;
+            // std::cout << std::setprecision(6) << "F12_irradiation=" << F12_irradiation << std::endl;
+
             // Finally convert bolometric values into "filter-integrated" or single-wavelength values by using the Plank function.
             // Units: W / m^3
             double planck_value2 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T2_eff) : Subs::planck(mdl.wavelength, T2_eff);
 
             // Define a "flux" (not actually flux) used to estimate total light from the system later.
             star2[i].flux = star2[i].area * planck_value2; // Units: W / m
+            star2[i].temp = T2_eff;
 
             // TODO: Reflection, handled by using (1.0 - mdl.absorb). Uses spectrum(temperature) of star1 with a scale_factor I_filter/I_bolometric
-                        
+        
         }else{ // Original behavior: treat star1 as a point source without starspots. This is perfectly fine unless starspots affect irradiation.
 
             vec = cofm1 - star2[i].posn;
@@ -356,7 +368,173 @@ void Lcurve::set_star_continuum(const Model& mdl,
         }        
     }
 
+
+    // ==========================================
+    // |  Begin star1 back-heating calculations |
+    // ==========================================
+
+    // Redoing star1 calculations using the star2 as an irradiation source
+    // Only enabled with finite_irr21
+    if(mdl.finite_irr21 && mdl.absorb > 0){
+        
+        // Start with a fresh star1.
+        const Subs::Vec3 cofm2(1.,0.,0.);
+        
+        double geom;
+    
+        const double GDCBOL1 = mdl.gdark_bolom1 ? mdl.gravity_dark1 : mdl.gravity_dark1 / Subs::dlpdlt(mdl.wavelength, mdl.t1);
+        
+        // compute direction of star spot 11, 12, 13, and the direct impact starspot (stsp1i)
+        Subs::Vec3 spot11, spot12, spot13, spot1i;
+        bool is_spot11 = mdl.stsp11_long.defined && mdl.stsp11_lat.defined && mdl.stsp11_fwhm.defined && mdl.stsp11_tcen.defined;
+        bool is_spot12 = mdl.stsp12_long.defined && mdl.stsp12_lat.defined && mdl.stsp12_fwhm.defined && mdl.stsp12_tcen.defined;
+        bool is_spot13 = mdl.stsp13_long.defined && mdl.stsp13_lat.defined && mdl.stsp13_fwhm.defined && mdl.stsp13_tcen.defined;
+        
+        bool is_spot1i = mdl.stsp1i_long.defined && mdl.stsp1i_lat.defined && mdl.stsp1i_fwhm_lat.defined && mdl.stsp1i_fwhm_long.defined && mdl.stsp1i_escale_len.defined && mdl.stsp1i_tcen.defined;
+        
+        double clong11=0., slong11=0., clat11=0., slat11=0.;
+        double clong12=0., slong12=0., clat12=0., slat12=0.;
+        double clong13=0., slong13=0., clat13=0., slat13=0.;
+        double clong1i=0., slong1i=0., clat1i=0., slat1i=0.;
+        if(is_spot11){
+            clong11 = std::cos(Subs::deg2rad(mdl.stsp11_long.value));
+            slong11 = std::sin(Subs::deg2rad(mdl.stsp11_long.value));
+            clat11 = std::cos(Subs::deg2rad(mdl.stsp11_lat.value));
+            slat11 = std::sin(Subs::deg2rad(mdl.stsp11_lat.value));
+        	spot11 = Subs::Vec3(clat11*clong11, clat11*slong11, slat11);
+        }
+    
+        if(is_spot12){
+            clong12 = std::cos(Subs::deg2rad(mdl.stsp12_long.value));
+            slong12 = std::sin(Subs::deg2rad(mdl.stsp12_long.value));
+            clat12  = std::cos(Subs::deg2rad(mdl.stsp12_lat.value));
+            slat12  = std::sin(Subs::deg2rad(mdl.stsp12_lat.value));
+        	spot12 = Subs::Vec3(clat12*clong12, clat12*slong12, slat12);
+        }
+    
+        if(is_spot13){
+            clong13 = std::cos(Subs::deg2rad(mdl.stsp13_long.value));
+            slong13 = std::sin(Subs::deg2rad(mdl.stsp13_long.value));
+            clat13  = std::cos(Subs::deg2rad(mdl.stsp13_lat.value));
+            slat13  = std::sin(Subs::deg2rad(mdl.stsp13_lat.value));
+        	spot13 = Subs::Vec3(clat13*clong13, clat13*slong13, slat13);
+        }
+    
+        if(is_spot1i){ // Star1 impact spot
+            clong1i = std::cos(Subs::deg2rad(mdl.stsp1i_long.value));
+            slong1i = std::sin(Subs::deg2rad(mdl.stsp1i_long.value));
+            clat1i = std::cos(Subs::deg2rad(mdl.stsp11_lat.value));
+            slat1i = std::sin(Subs::deg2rad(mdl.stsp11_lat.value));
+        	spot1i = Subs::Vec3(clat1i*clong1i, clat1i*slong1i, slat1i); // (x,y,z) cartesian position of impact starspot
+        }
+    
+        // Build star1 grid details
+        int nelem1 = star1.size();
+        for(int i=0; i<nelem1; i++){
+            vec = cofm2 - star1[i].posn; // Points from star1 surface element towards center of star2
+            r = vec.length();
+            mu = Subs::dot(star1[i].dirn, vec)/r;
+    
+            // All grid point start with the same temperature t1 (fresh start)
+            double t1 = mdl.t1;
+    
+            // Add starspots
+            if(is_spot11 && mdl.stsp11_fwhm > 0){
+            	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot11)/star1[i].posn.length()));
+            	t1 += (mdl.stsp11_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp11_fwhm/Constants::EFAC))/2.);
+            }
+        	if(is_spot12 && mdl.stsp12_fwhm > 0){
+            	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot12)/star1[i].posn.length()));
+                t1 += (mdl.stsp12_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp12_fwhm/Constants::EFAC))/2.);
+            }
+        	if(is_spot13 && mdl.stsp13_fwhm > 0){
+            	double dist = Subs::rad2deg(std::acos(Subs::dot(star1[i].posn, spot13)/star1[i].posn.length()));
+        	    t1 += (mdl.stsp13_tcen-mdl.t1)*std::exp(-Subs::sqr(dist/(mdl.stsp13_fwhm/Constants::EFAC))/2.);
+            }
+            if(is_spot1i && mdl.stsp1i_fwhm_long > 0 && mdl.stsp1i_escale_len > 0 && mdl.stsp1i_fwhm_lat > 0){
+    
+                // Latitude and longitudes all in radians here for trig calculations.
+                double surface_longitude = std::atan2(star1[i].posn.y(), star1[i].posn.x()); // longitude of surface element
+                double surface_latitude = std::asin(star1[i].posn.z() / star1[i].posn.length());
+                
+                double impact_longitude = Subs::deg2rad(mdl.stsp1i_long); // longitude of direct-impact spot center
+                double impact_latitude = Subs::deg2rad(mdl.stsp1i_lat);
+    
+                double fwhm_longitude = Subs::deg2rad(mdl.stsp1i_fwhm_long); // Gaussian decay of impact spot in longitude direction
+                double fwhm_latitude = Subs::deg2rad(mdl.stsp1i_fwhm_lat);   // Gaussian decay of impact spot in latitude direction
+                double advection_scale_length = Subs::deg2rad(mdl.stsp1i_escale_len); // Exponential decay of advection tail
+                
+                // Latitude calculations
+                double latitude_offset = Subs::abs(impact_latitude - surface_latitude);
+                double latitude_decay_term = std::exp(-Subs::sqr(latitude_offset/(fwhm_latitude/Constants::EFAC))/2.);
+    
+                // Longitude calculations
+                double delta_phi = surface_longitude - impact_longitude; // Raw difference in longitude (radians). Positive means surface element is downstream from impact center
+                delta_phi = std::fmod(delta_phi + Constants::PI, 2.0*Constants::PI) - Constants::PI; // Enable decay over the full longitude circumference.
+    
+                bool spherical_correction = false; // Apply spherical correction to "fix" decay at high latitudes? (energy transport stuff?)
+                double delta_phi_phys = spherical_correction ? delta_phi * std::cos(surface_latitude) : delta_phi;
+                
+                double upstream_limit = -5.0 * fwhm_longitude / Constants::EFAC; // Hard cutoff at 5 sigma for "upstream" direction limits. All other longitudes are "downstream"
+                bool upstream = (delta_phi_phys >= upstream_limit) && (delta_phi_phys <= 0.0);
+    
+                double longitude_decay_term;
+                if(upstream){
+                    longitude_decay_term = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_longitude/Constants::EFAC))/2.);
+                }else{
+                    double delta_phi_downstream = std::fmod(surface_longitude - impact_longitude, 2.0*Constants::PI);
+                    if(delta_phi_downstream < 0.0){
+                        delta_phi_downstream += 2.0*Constants::PI;
+                    }
+                    double delta_phi_downstream_phys = spherical_correction ? delta_phi_downstream*std::cos(surface_latitude) : delta_phi_downstream;
+                    
+                    double core_contribution = std::exp(-Subs::sqr(delta_phi_phys/(fwhm_longitude/Constants::EFAC))/2.);
+                    double tail_contribution = std::exp(-delta_phi_downstream_phys/advection_scale_length) * (1.0 - core_contribution);
+                    longitude_decay_term = core_contribution + tail_contribution; // Gaussian + Exponential - Gaussian*Exponential
+                }
+                t1 += (mdl.stsp1i_tcen - mdl.t1) * longitude_decay_term * latitude_decay_term;                
+            }
+    
+            // Use finite surface elements from star2 to irradiate star1.
+            if(mdl.finite_irr21 && mdl.absorb > 0){
+                
+                double T1_intrinsic = t1 * pow(double(star1[i].gravity), GDCBOL1);
+                double F1_intrinsic = Constants::SIGMA * std::pow(T1_intrinsic, 4);
+        
+                double F21_irradiation = 0.0; 
+                for(int j=0; j<nelem2; j++){
+        
+                    Subs::Vec3 vec21 = star1[i].posn - star2[j].posn;
+                    double r21 = vec21.length();                     
+                    
+                    Subs::Vec3 vec12 = star2[j].posn - star1[i].posn;
+                    double r12 = vec12.length();                     
+                    
+                    double mu1 = Subs::dot(star1[i].dirn, vec12) / r12;
+                    double mu2 = Subs::dot(star2[j].dirn, vec21) / r21;
+                    
+                    if(mu1 > 0.0 && mu2 > 0.0){
+    
+                        if(opaque_disc_enabled && disc_blocks_ray(star2[j], vec21, mdl)){
+                            continue;
+                        }
+                        
+                        double star2j_intensity_bolometric = Constants::SIGMA * std::pow(star2[j].temp, 4) / Constants::PI;
+        
+                        star2j_intensity_bolometric *= ldc2.imu(mu2); 
+                        
+                        double geom = mu2 * mu1 * star2[j].area / (r21*r21);
+                        
+                        F21_irradiation += star2j_intensity_bolometric * geom;
+                    }
+                }
+        
+                double T1_eff = pow((F1_intrinsic + mdl.absorb*F21_irradiation)/Constants::SIGMA, 0.25);
+                double planck_value1 = integrate_filter ? Subs::interp1d(temperature_array, planck_array, T1_eff) : Subs::planck(mdl.wavelength, T1_eff);
+        
+                star1[i].flux = star1[i].area * planck_value1; // Units: W / m
+                star1[i].temp = T1_eff;
+            }
+        }
+    }
 }
-// Do not iterate to calculate star1's flux based on star2's surface element flux.
-// TODO: Consider systems with starspot and disc. The disc may block irradiation.
-//     Check that the vector between star1[j].posn and star2[i].posn doesn't intersect disc[k].posn
