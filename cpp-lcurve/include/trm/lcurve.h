@@ -532,13 +532,13 @@ namespace Lcurve {
     Pparam stsp1i_lat;
 
     //! fwhm of impact spot in upstream longitude direction
-    Pparam stsp1i_fwhm_long1;
-
-    //! fwhm of impact spot in downstream longitude direction
-    Pparam stsp1i_fwhm_long2;
+    Pparam stsp1i_fwhm_long;
 
     //! fwhm of impact spot in latitude direction
     Pparam stsp1i_fwhm_lat;
+
+    //! exponential scale length of the impact spot in downstream longitude direction (degrees)
+    Pparam stsp1i_escale_len;
 
     //! temperature of impact spot center
     Pparam stsp1i_tcen;
@@ -658,6 +658,10 @@ namespace Lcurve {
     //! Very slow due to nested loop. Seems to be ~3x slower than without.
     //! Be sure to use small values for nlat1c, nlat2c, nlat1f, nlat2f
     bool finite_irr12;
+
+    // Irradiation from star2 -> star1
+    // Requires that finite_irr12 be enabled and absorb > 0.0
+    bool finite_irr21;
 
     //! Third light enabled/disabled flag.
     bool third;
@@ -808,6 +812,12 @@ namespace Lcurve {
   void set_disc_edge(const Model& mdl, bool outer,
 		     Subs::Buffer1D<Lcurve::Point>& edge,
 		     bool visual=true);
+
+  //! Checks if the accretion disc block irradiation between the stars
+  bool disc_blocks_ray(const Lcurve::Point& ray_origin,
+                        const Subs::Vec3& ray_vec,
+                        const Model& mdl
+                        );
 
   //! Sets the continuum element contributions
   void set_star_continuum(const Model& mdl,
