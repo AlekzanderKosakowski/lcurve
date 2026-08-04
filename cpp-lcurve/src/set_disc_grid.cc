@@ -264,3 +264,112 @@ void Lcurve::set_disc_edge(const Model& mdl, bool outer,
 }
 
 
+
+
+/**
+ * Finite-radius irradiation between stars introduces the problem of
+ * an accretion disc intercepting rays between stars, preventing
+ * irradiation of certain parts of the receiving star. This function 
+ * tries to handle that by determining if a ray is intercepted on its path
+ * between two surface elements.
+ *
+ * This function is called once per surface element pair during finite irradiation
+ * calculations. This means it is only called if finite_irr12 is enabled and
+ * only if mu1>0 and mu2>0.
+ *
+ * This approximates the disc interception by checking the ray height (z-position)
+ * where it crosses the outer disc radius. This assumes the outer rim of the disc
+ * is the disc's maximum vertical extent (a simplified concave flared disc model).
+ *    
+ * This is done by solving the quadratic for the eqn of a circle with r = rdisc2
+ * for the intersection points of the irradiation with the disc edges.
+ * If the irradiation passed through the disc radial extent, then compare its z-posn
+ * to the height of the disc at that (x, y) position to confirm occultation.
+ *
+ * Outputs :
+ *         True  : Boolean
+ *                 The elements can not see each other
+ *                 The disc intercepts the ray
+ *         False : Boolean
+ *                 The elements can see each other
+ *                 The disc does not intercept the ray
+ *
+ *
+ * Inputs :
+ *         ray_origin : Lcurve::Point object
+ *                      Starting location of the irradiation (surface element on star)
+ *         ray_vec    : Subs::Vec3 object
+ *                      Full displacement vector connecting the ray's start and end locations
+                          starting on one surface element and ending on another
+ *         mdl        : Lcurve::Model object
+ *                      Contains necessary disc geometry parameters
+ *
+ */
+bool Lcurve::disc_blocks_ray(const Lcurve::Point& ray_origin,
+                             const Subs::Vec3& ray_vec,
+                             const Model& mdl
+                            ){
+    if(!mdl.add_disc){
+        return false;
+    }
+    
+    double a = ray_vec.x()*ray_vec.x() + ray_vec.y()*ray_vec.y();
+    if(a < 1e-12){
+        return false;
+    }
+
+    double b = 2.0*(ray_origin.posn.x()*ray_vec.x() +
+                    ray_origin.posn.y()*ray_vec.y());
+
+    double c = ray_origin.posn.x()*ray_origin.posn.x() +
+               ray_origin.posn.y()*ray_origin.posn.y() -
+               mdl.rdisc2*mdl.rdisc2;
+
+
+    double discriminant = b*b - 4.0*a*c;
+    if (discriminant < 0.0){
+        if (discriminant > -1e-12){
+            discriminant = 0.0;
+        }
+        else{
+            throw Lcurve_Error("Lcurve::disc_blocks_ray(): Unexpected ray geometry: Negative discriminant");
+        }
+    }
+    
+    double root = sqrt(discriminant);
+
+    // Two roots (the points the line intersects the circle)
+    // "t" is the fractional distance between the surface elements in direction of propagation
+    double t1 = (-b-root)/(2.0*a);
+    double t2 = (-b+root)/(2.0*a);
+
+    // Since we solve for these roots as fractional distances between the start/end of the ray's path,
+    //   the only physically correct root is the one with value between 0.0 and 1.0
+    // If the root is t < 0.0, then the disc-crossing point is behind the starting point
+    //   This will be one of the roots if the irradiation comes from the accretor
+    // If the root is t > 0.0, then the disc-crossing point is behind the ending point
+    //   This will be one of the roots if the irradiation comes from the donor
+
+    // Check the first root.
+    double t_hit = t1;
+    if(t_hit < 0.0 || t_hit > 1.0)
+        t_hit = t2;
+
+    if(t_hit < 0.0 || t_hit > 1.0){ // One of the roots must be between 0.0 and 1.0 since the disc must surround one of the stars.
+        throw Lcurve_Error("Lcurve::disc_blocks_ray(): Unexpected ray geometry: No roots found between 0.0 and 1.0");
+    }
+
+    // We now know the (x,y,z) position of the ray when it reaches a distance
+    // rdisc2 from the accretor, which is the tallest part of the disc in this model.
+    // Now we check if the ray's z-position is lower than the disc's z-position at this (x,y) position
+    
+    Subs::Vec3 p = ray_origin.posn + t_hit*ray_vec;
+
+    double R = sqrt(p.x()*p.x() + p.y()*p.y());
+    double H = mdl.height_disc * pow(R, mdl.beta_disc);
+
+    if(fabs(p.z()) < H)
+        return true;
+
+    return false;
+}
