@@ -24,7 +24,7 @@ Running "visualise" includes prompts to define the colormap used for the plot. T
 
 The "reverse" parameter reverses the color maps. The "colorscale" parameter allows for log10 or linear scaling. The "ncolors" parameter defines the resolution of the color grid (between 16-239).
 
-### 2) Starspot irradiation:
+### 2) Finite-radius irradiation:
 
 The original code treats star1 as a point source for irradiation onto star2. This worked well, but meant ignoring contribution from star1's starspots. I've adjusted the source code to allow the user to enable an optional flag (finite_irr12) in their parameters.txt file to include contribution from all of star1's surface elements as irradiation contributors towards star2.
 
@@ -33,11 +33,16 @@ This was done via a nested loop, so the runtime increases significantly when ena
 ![Starspot irradiation at latitude 0 degrees](figures/starspot_irradiation_0deg.gif)
 ![Starspot irradiation at latitude 60 degrees](figures/starspot_irradiation_60deg.gif)
 
+When an opaque accretion disc is enabled, the finite-radius irradiation between stars will be blocked by the disc geometry, creating a band of lower surface temperature within the shadow of the disc on the irradiated star. The image below shows an exaggerated system with this effect enabled. When finite_irr is disabled, the original point-source irradiation behavior is applied between the stars and the disc does not block the irradiation. Irradiation onto the accretion disc from the donor star is still treated with a point-source approximation.
+
+![Starspot irradiation at latitude 0 degrees](figures/finite_disc_irradiation.jpg)
+
+
 ### 3) Direct-impact starspot with advection (new parameters: stsp1i\_):
 
-I've replaced the "uniform equatorial starspot" on star1 with a starspot that includes FWHM decay parameters for latitude and two longitude directions separately. The positive longitude direction corresponds to "downstream" relative to the stellar spin direction and includes an exponential tail to the flux decay to simulate advection in direct-impact accretion binaries. This new spot can be placed at any latitude to account for polar-like accretion onto magnetic poles.
+I've replaced the "uniform equatorial starspot" on star1 with a starspot that includes decay parameters for a Gaussian core and exponential tail in the direction of stellar rotation. The positive longitude direction corresponds to "downstream" relative to the stellar spin direction and includes an exponential tail to the flux decay to approximate advection in direct-impact accretion binaries. This new spot can be placed at any latitude to account for polar-like accretion onto magnetic poles.
 
-Longitudes are considered "upstream" only within -5\*stsp1i_fwhm_long1 of the impact spot center. All other longitudes are considered "downstream" and use stsp1i_fwhm_long2 to simulate Gaussian decay with an exponential tail, allowing the smeared spot to smoothly extend nearly the full 360 degrees around the stellar surface. The animation below shows an exaggerated effect for demonstration.
+Longitudes are considered upstream only within -5\*stsp1i_fwhm_long of the impact spot center. All other longitudes are considered downstream. The core FWHM is defined by the stsp1i_fwhm_long and stsp1i_fwhm_lat parameters. The exponential tail is defined by the scale length parameter stsp1i_escale_len. The animation below demonstrates this feature in an exaggerated system.
 
 ![Example direct-impact accretion binary with "starspot" advection.](figures/direct_impact_advection_spot.gif)
 
