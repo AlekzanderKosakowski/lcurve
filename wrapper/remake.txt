@@ -1,0 +1,15 @@
+rm -v ../lib/liblegacy.a
+make
+rm -v lcurve_wrapper.cpython-311-x86_64-linux-gnu.so
+g++ -O3 -Wall -std=c++14 -fPIC \
+    -I/usr/local/include/python3.11 \
+    -I../cpp-binary/include \
+    -I../cpp-roche/include \
+    -I../cpp-lcurve/include \
+    -I../cpp-colly/include \
+    -I../cpp-subs/include \
+    -I../external/pybind11/include \
+    -I/usr/local/src/pgplot/include \
+    -shared wrapper.cpp ../lib/liblegacy.a \
+    -L/usr/local/lib -lcsla -lpcrecpp -lpcre -lgomp \
+    -o lcurve_wrapper`python3.11-config --extension-suffix`
