@@ -5,8 +5,40 @@
 #include "trm/subs.h"
 #include <iostream>
 #include <string>
+#include "trm/input.h"
 
 namespace py = pybind11;
+
+std::vector<std::array<double, 3>> project_visible(
+    const Subs::Buffer1D<Lcurve::Point>& object,
+    const Subs::Vec3& earth,
+    const Subs::Vec3& cofm,
+    const Subs::Vec3& xsky,
+    const Subs::Vec3& ysky,
+    double phase)
+{
+    std::vector<std::array<double, 3>> points;
+
+    for (int i = 0; i < object.size(); ++i) {
+
+        if (Subs::dot(earth, object[i].dirn) > 0. &&
+            object[i].visible(phase)) {
+
+            Subs::Vec3 r = object[i].posn - cofm;
+
+            double xpos = Subs::dot(r, xsky);
+            double ypos = Subs::dot(r, ysky);
+
+            points.push_back({
+                xpos,
+                ypos,
+                object[i].temp
+            });
+        }
+    }
+
+    return points;
+}
 
 
 // This is a wrapper for very specific parts of lcurve to be accessed from python
@@ -93,7 +125,7 @@ public:
     }
 
     // Write the model parameters to a new parameters.txt file.
-    void write_to_parameter_file(const std::string& ofilename) {
+    void write_to_parameters_file(const std::string& ofilename) {
         if (!model_) {
             throw std::runtime_error("model_ is null");
         }
@@ -109,13 +141,13 @@ public:
 
             if (static_cast<size_t>(param_buffer_.size()) != params.size())
                 param_buffer_.resize(params.size());
-        
+
             for (size_t i = 0; i < params.size(); i++)
                 param_buffer_[i] = params[i];
-        
+
             if (model_->is_not_legal(param_buffer_))
                 throw std::runtime_error("Attempted to set illegal parameter values");
-        
+
             model_->set_param(param_buffer_);
         }
         catch (const Lcurve::Lcurve_Error& e) {
@@ -203,12 +235,196 @@ public:
         return model_->nvary();
     }
 
+
+    // Give LCurveWrapper object a visualise command at a specific phase.
+    py::dict visualise_data(double phase)
+    {
+        // Prepare radii
+        double r1, r2, rdisc1=0., rdisc2=0.;
+        model_->get_r1r2(r1, r2);
+        double rl1 = Roche::xl11(model_->q,model_->spin1);
+        if(r1 <= 0){
+            r1 = 0.99999999999*rl1;
+        }
+        double rl2 = 1.-Roche::xl12(model_->q,model_->spin2);
+        if(r2 <= 0){
+            r2 = 0.99999999999*rl2;
+        }
+        
+        // One object per plotted component.
+        Subs::Buffer1D<Lcurve::Point> star1, star2, disc, outer_edge, inner_edge, bspot, stream;
+
+        // Generate grids for each component
+        Lcurve::set_star_grid(*model_, Roche::PRIMARY, true, star1);
+        Lcurve::set_star_grid(*model_, Roche::SECONDARY, true, star2);
+
+        // --------------------------------------------------
+        // Temperature grid for filter integration
+        // --------------------------------------------------
+        double temperature_grid_min = 100.0;
+        double temperature_grid_max = 100000.0;
+        double temperature_grid_step = 200.0;
+    
+        int N_temperatures = static_cast<int>(
+            std::ceil(
+                (temperature_grid_max - temperature_grid_min) / temperature_grid_step)
+            ) + 1;
+    
+        std::vector<double> temperature_array(N_temperatures);
+        std::vector<double> planck_array(N_temperatures);
+    
+        for (int i = 0; i < N_temperatures; ++i){
+            temperature_array[i] = temperature_grid_min + temperature_grid_step * i;
+    
+            if (temperature_array[i] > temperature_grid_max){
+                temperature_array[i] = temperature_grid_max;
+            }
+            planck_array[i] = 0.0;
+        }
+    
+        bool integrate_filter = !(
+            Subs::tolower(model_->filter) == "none" ||
+            Subs::tolower(model_->filter) == "false" ||
+            Subs::tolower(model_->filter) == "n" ||
+            Subs::tolower(model_->filter) == "no" ||
+            Subs::tolower(model_->filter) == "0"
+        );
+    
+        if (integrate_filter){
+            Subs::integrate_filter(temperature_array, planck_array, model_->filter);
+        }
+    
+        Lcurve::LDC ldc1 = model_->get_ldc1();
+        Lcurve::LDC ldc2 = model_->get_ldc2();
+    
+        set_star_continuum(*model_, star1, star2, integrate_filter, temperature_array, planck_array, ldc1, ldc2);
+
+        if(model_->add_disc){
+
+            rdisc1 = model_->rdisc1 > 0. ? model_->rdisc1 : r1;
+            rdisc2 = model_->rdisc2 > 0. ? model_->rdisc2 : model_->radius_spot;
+
+            Lcurve::set_disc_grid(*model_, disc);
+            Lcurve::set_disc_edge(*model_, true, outer_edge);
+            Lcurve::set_disc_edge(*model_, false, inner_edge);
+
+
+            std::vector<std::pair<double,double> > eclipses;
+            if(model_->opaque){
+	    
+                // Apply eclipse by disc to star 1
+                for(int i=0; i<star1.size(); i++){
+                    eclipses =  Roche::disc_eclipse(model_->iangle, rdisc1, rdisc2, model_->beta_disc, model_->height_disc, star1[i].posn);
+                    for(size_t j=0; j<eclipses.size(); j++)
+                        star1[i].eclipse.push_back(eclipses[j]);
+                }
+	    
+                // Apply eclipse by disc to star 2
+                for(int i=0; i<star2.size(); i++){
+                    eclipses =  Roche::disc_eclipse(model_->iangle, rdisc1, rdisc2, model_->beta_disc, model_->height_disc, star2[i].posn);
+                    for(size_t j=0; j<eclipses.size(); j++)
+                        star2[i].eclipse.push_back(eclipses[j]);
+                }
+            }
+
+            // Set the surface brightness of the disc
+            set_disc_continuum(rdisc2, model_->temp_disc, model_->texp_disc, model_->wavelength, disc, integrate_filter, temperature_array, planck_array);
+
+            // Set the surface brightness of outer edge, accounting for irradiation by star 2
+            set_edge_continuum(model_->temp_edge, r2, std::abs(model_->t2), model_->absorb_edge, model_->wavelength, outer_edge, integrate_filter, temperature_array, planck_array);
+        }
+
+        if(model_->add_spot){
+            Subs::Vec3 dir(1,0,0), posn, v;
+            Lcurve::set_bright_spot_grid(*model_, bspot, integrate_filter, temperature_array, planck_array);
+
+            double rl1_spot = Roche::xl1(model_->q);
+      
+            // Calculate a reference radius and potential for the two stars
+            double rref1, pref1, ffac1 = r1/rl1_spot;
+            Roche::ref_sphere(model_->q, Roche::PRIMARY, model_->spin1, ffac1, rref1, pref1);
+      
+            double rref2, pref2, ffac2 = r2/rl2;
+            Roche::ref_sphere(model_->q, Roche::SECONDARY, model_->spin2, ffac2, rref2, pref2);
+      
+            dir.set(0,0,1);
+            Roche::strinit(model_->q, posn, v);
+      
+            Lcurve::Point::etype eclipses, edisc;
+            Lcurve::star_eclipse(model_->q, r1, model_->spin1, ffac1, model_->iangle, posn, model_->delta_phase, model_->roche1, Roche::PRIMARY,   eclipses);
+            Lcurve::star_eclipse(model_->q, r2, model_->spin2, ffac2, model_->iangle, posn, model_->delta_phase, model_->roche2, Roche::SECONDARY, eclipses);
+            stream.push_back(Lcurve::Point(posn, dir, 0., 1., eclipses));
+		       
+            const int NSTREAM = int((rl1_spot-model_->radius_spot)/0.001);
+            double radius;
+            for(int i=0; i<NSTREAM; i++){
+                radius = rl1_spot + (model_->radius_spot-rl1_spot)*(i+1)/NSTREAM;
+                Roche::stradv(model_->q, posn, v, radius, 1.e-10, 1.e-3);
+                eclipses.clear();
+                Lcurve::star_eclipse(model_->q, r1, model_->spin1, ffac1, model_->iangle, posn, model_->delta_phase, model_->roche1, Roche::PRIMARY,   eclipses);
+                Lcurve::star_eclipse(model_->q, r2, model_->spin2, ffac2, model_->iangle, posn, model_->delta_phase, model_->roche2, Roche::SECONDARY, eclipses);
+                if(model_->add_disc){
+                    edisc = Roche::disc_eclipse(model_->iangle, rdisc1, rdisc2, model_->beta_disc, model_->height_disc, posn);
+                    for(size_t j=0; j<edisc.size(); j++)
+                        eclipses.push_back(edisc[j]);
+                }
+                stream.push_back(Lcurve::Point(posn, dir, 0., 1., eclipses));
+            }	
+        }
+
+        // --------------------------------------------------
+        // Geometry -- copied from legacy visualise
+        // --------------------------------------------------
+    
+        Subs::Vec3 cofm(
+            model_->q / (1. + model_->q),
+            0.,
+            0.
+        );
+    
+        Subs::Vec3 earth = Roche::set_earth(model_->iangle, phase);
+
+        double cosp =std::cos(Constants::TWOPI * phase);
+        double sinp = std::sin(Constants::TWOPI * phase);
+    
+        Subs::Vec3 xsky(sinp, cosp, 0.);
+        Subs::Vec3 ysky = Subs::cross(earth, xsky);
+    
+        // --------------------------------------------------
+        // Project visible points
+        // --------------------------------------------------
+    
+        auto points1 = project_visible(star1, earth, cofm, xsky, ysky, phase);    
+        auto points2 = project_visible(star2, earth, cofm, xsky, ysky, phase);
+        auto points_bspot = project_visible(bspot, earth, cofm, xsky, ysky, phase);
+        auto points_disc = project_visible(disc, earth, cofm, xsky, ysky, phase);
+        auto points_outer_edge = project_visible(outer_edge, earth, cofm, xsky, ysky, phase);
+        auto points_stream = project_visible(stream, earth, cofm, xsky, ysky, phase);
+
+
+        // --------------------------------------------------
+        // Return to Python
+        // --------------------------------------------------
+    
+        py::dict result;
+    
+        result["star1"] = points1;
+        result["star2"] = points2;
+        result["bspot"] = points_bspot;
+        result["disc"] = points_disc;
+        result["outer_edge"] = points_outer_edge;
+        result["stream"] = points_stream;
+    
+        return result;
+    }
 };
 
 // Define the stuff you want Python to access here.
 PYBIND11_MODULE(lcurve_wrapper, m) {
     py::class_<Lcurve::Pparam>(m, "Pparam") // Lcurve::Model stores variables in a PParam. We want this and the ability to modify param.value, param.vary, param.defined
         .def_readwrite("value", &Lcurve::Pparam::value)
+        .def_readwrite("range", &Lcurve::Pparam::range)
+        .def_readwrite("dstep", &Lcurve::Pparam::dstep)
         .def_readwrite("vary", &Lcurve::Pparam::vary)
         .def_readwrite("defined", &Lcurve::Pparam::defined);
 
@@ -292,13 +508,28 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("stsp22_tcen", &Lcurve::Model::stsp22_tcen)
         .def_readwrite("stsp1i_long", &Lcurve::Model::stsp1i_long)
         .def_readwrite("stsp1i_lat", &Lcurve::Model::stsp1i_lat)
-        .def_readwrite("stsp1i_fwhm_long1", &Lcurve::Model::stsp1i_fwhm_long1)
-        .def_readwrite("stsp1i_fwhm_long2", &Lcurve::Model::stsp1i_fwhm_long2)
+        .def_readwrite("stsp1i_fwhm_long", &Lcurve::Model::stsp1i_fwhm_long)
         .def_readwrite("stsp1i_fwhm_lat", &Lcurve::Model::stsp1i_fwhm_lat)
+        .def_readwrite("stsp1i_escale_len", &Lcurve::Model::stsp1i_escale_len)
         .def_readwrite("stsp1i_tcen", &Lcurve::Model::stsp1i_tcen)
-        .def_readonly("add_spot", &Lcurve::Model::add_spot)
-        .def_readonly("add_disc", &Lcurve::Model::add_disc)
+        .def_readwrite("tperiod", &Lcurve::Model::tperiod)
+        .def_readwrite("eclipse1", &Lcurve::Model::eclipse1)
+        .def_readwrite("eclipse2", &Lcurve::Model::eclipse2)
+        .def_readwrite("roche1", &Lcurve::Model::roche1)
+        .def_readwrite("roche2", &Lcurve::Model::roche2)
+        .def_readwrite("nlat1f", &Lcurve::Model::nlat1f)
+        .def_readwrite("nlat2f", &Lcurve::Model::nlat2f)
+        .def_readwrite("nlat1c", &Lcurve::Model::nlat1c)
+        .def_readwrite("nlat2c", &Lcurve::Model::nlat2c)
+        .def_readwrite("nrad", &Lcurve::Model::nrad)
+        .def_readwrite("nspot", &Lcurve::Model::nspot)
+        .def_readwrite("add_spot", &Lcurve::Model::add_spot)
+        .def_readwrite("add_disc", &Lcurve::Model::add_disc)
+        .def_readwrite("opaque", &Lcurve::Model::opaque)
+        .def_readwrite("filter", &Lcurve::Model::filter)
+        .def_readwrite("wavelength", &Lcurve::Model::wavelength)
         .def_readwrite("finite_irr12", &Lcurve::Model::finite_irr12)
+        .def_readwrite("finite_irr21", &Lcurve::Model::finite_irr21)
         .def_readwrite("third", &Lcurve::Model::third);
 
     py::class_<LCurveWrapper>(m, "LCurveModel")
@@ -312,6 +543,7 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def("get_model", &LCurveWrapper::get_model, py::return_value_policy::reference)
         .def("nvary", &LCurveWrapper::nvary)
         .def("clone", &LCurveWrapper::clone)
-        .def("write_to_parameter_file", &LCurveWrapper::write_to_parameter_file);
+        .def("write_to_parameters_file", &LCurveWrapper::write_to_parameters_file)
+        .def("visualize_data", &LCurveWrapper::visualise_data, py::arg("phase"));
 }
 
