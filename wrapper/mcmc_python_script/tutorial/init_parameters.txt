@@ -1,0 +1,9 @@
+# parameter lower_limit upper_limit
+q 0.25 0.26
+iangle 79 80
+r1 0.195 0.205
+r2 0.167 0.187
+velocity_scale 358 368
+t1 28000 30000
+t2 4300 4800
+t0 2455680.561823884 2455680.5625183284
