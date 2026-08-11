@@ -29,8 +29,9 @@ void Lcurve::set_disc_continuum(double rdisc, double tdisc, double texp,
     const double BRIGHT = planck_value_disc;
     
     for(int i=0; i<disc.size(); i++){
-	double r = disc[i].posn.length();
-	disc[i].flux = BRIGHT*pow(r/rdisc, texp)*disc[i].area;
+    	double r = disc[i].posn.length();
+    	disc[i].flux = BRIGHT*pow(r/rdisc, texp)*disc[i].area;
+    	disc[i].temp = tdisc*pow(r/rdisc, texp);
     }
 }    
 
@@ -91,6 +92,7 @@ void Lcurve::set_edge_continuum(double tedge, double r2, double t2,
         
         double planck_value_disc_edge = integrate_filter ? Subs::interp1d(temperature_array, planck_array, temp) : Subs::planck(wave, temp);
         edge[i].flux = edge[i].area * planck_value_disc_edge;
+        edge[i].temp = temp;
     }
 }    
 
