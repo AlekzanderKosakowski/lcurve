@@ -1,13 +1,46 @@
 // wrapper.cpp
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+
 #include "trm/lcurve.h"
 #include "trm/subs.h"
-#include <iostream>
-#include <string>
 #include "trm/input.h"
 
+
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace py = pybind11;
+
+
+struct lroche_output {
+    // Expected outputs from lroche (compute_light_curve() call)
+    std::vector<double> model_flux;
+
+    double chisq;
+    double wnok;
+    double wdwarf;
+
+    double logg1;
+    double logg2;
+
+    double rvol1;
+    double rvol2;
+
+    double ffac1;
+    double ffac2;
+
+    std::vector<double> sfac;
+};
+
 
 std::vector<std::array<double, 3>> project_visible(
     const Subs::Buffer1D<Lcurve::Point>& object,
@@ -49,41 +82,17 @@ public:
     std::shared_ptr<Lcurve::Data> data_;
     Subs::Buffer1D<double> sfac_;
 
-    Subs::Array1D<double> fit_;
+    Subs::Array1D<double> model_flux_;
     Subs::Array1D<double> param_buffer_;
 
     // Constructor: initialize model from a file
-    LCurveWrapper(const std::string& model_file,
-                  const std::string& data_file) {
+    LCurveWrapper(const std::string& model_file) {
         try {
 
-            // const char* dir = std::getenv("LCURVE_DIR");
-            // const char* env = std::getenv("LCURVE_ENV");
-            // std::cout << "DEBUG: LCURVE_DIR = " << (dir ? dir : "not set") << std::endl;
-            // std::cout << "DEBUG: LCURVE_ENV = " << (env ? env : "not set") << std::endl;
-
-            // char cwd[1024];
-            // if (getcwd(cwd, sizeof(cwd)) != nullptr)
-            //     std::cout << "DEBUG: Current working directory = " << cwd << std::endl;
-
-            // std::ifstream fin_model(model_file.c_str());
-            // if (!fin_model) {
-            //     std::cerr << "DEBUG: Tried to open file: " << model_file << std::endl;
-            //     throw std::runtime_error("Cannot open model file for Lcurve::Model");
-            // }
-            // std::ifstream fin_data(data_file.c_str());
-            // if (!fin_data) {
-            //     std::cerr << "DEBUG: Tried to open file: " << data_file << std::endl;
-            //     throw std::runtime_error("Cannot open data file for Lcurve::Data");
-            // }
-
             model_ = std::make_unique<Lcurve::Model>(model_file);
-            data_ = std::make_shared<Lcurve::Data>(data_file);
 
-
-            // Scale factors buffer
-            sfac_.resize(4);
-            for (int i = 0; i < 4; i++)
+            sfac_.resize(5);
+            for (int i = 0; i < 5; i++)
                 sfac_[i] = 1.0;
         }
         catch (const Lcurve::Lcurve_Error& e) {
@@ -101,10 +110,10 @@ public:
     // Custom copy constructor
     // -------------------------
     LCurveWrapper(const LCurveWrapper& other)
-        : model_(std::make_unique<Lcurve::Model>(*other.model_)), // deep copy
-          data_(other.data_),                                     // shared pointer
-          sfac_(other.sfac_),                                     // copy buffer
-          fit_(other.fit_),
+        : model_(std::make_unique<Lcurve::Model>(*other.model_)), // deep copy (gets unique model)
+          data_(other.data_),                                     // shared data between cloned models
+          sfac_(other.sfac_),
+          model_flux_(other.model_flux_),
           param_buffer_(other.param_buffer_)
     {
         // Nothing else needed
@@ -115,14 +124,60 @@ public:
     // Clone method for emcee
     // -------------------------
     std::unique_ptr<LCurveWrapper> clone() const {
-        // Use copy constructor — NO file I/O
+        // Use copy constructor (allows us to skip file I/O to build a new model object)
         return std::make_unique<LCurveWrapper>(*this);
     }
 
 
+    // Update the model object's stored LCurve::Data object using NumPy inputs
+    void set_data(const py::array_t<double, py::array::c_style | py::array::forcecast>& data){
+        auto buf = data.request();
+    
+        if (buf.ndim != 2) // Input must be of shape (N, M)
+            throw std::runtime_error(
+                "set_data: data must be a 2-dimensional NumPy array"
+            );
+    
+        if (buf.shape[1] != 6) // Each row must have 6 columns
+            throw std::runtime_error(
+                "set_data: data must have exactly 6 columns"
+            );
+
+        const ssize_t n = buf.shape[0];
+    
+        // Pointer to the first element of the contiguous NumPy array.
+        const double* ptr = static_cast<const double*>(buf.ptr);
+        
+        auto new_data = std::make_shared<Lcurve::Data>(
+            static_cast<int>(n)
+        );
+    
+        for (ssize_t i = 0; i < n; ++i) {
+
+            // Each row is:
+            // time, exposure, flux, flux_error, weight, ndiv
+            const double* row = ptr + i * 6;
+    
+            (*new_data)[i].time   = row[0];
+            (*new_data)[i].expose = row[1];
+            (*new_data)[i].flux   = row[2];
+            (*new_data)[i].ferr   = row[3];
+            (*new_data)[i].weight = row[4];
+
+            if (row[5] < 1 || row[5] != std::floor(row[5]))
+                throw std::runtime_error("Light curve data column 6 (ndiv) must contain positive integers");
+            
+            (*new_data)[i].ndiv = static_cast<int>(row[5]); // NumPy made this a float. Now we have C++ fix it back to integer
+        }
+    
+        data_ = std::move(new_data); // Update the model's data_ object
+    }
+    
+    
     Lcurve::Model& get_model() {
         return *model_;
     }
+
 
     // Write the model parameters to a new parameters.txt file.
     void write_to_parameters_file(const std::string& ofilename) {
@@ -161,35 +216,7 @@ public:
         }
     }
 
-    // Compute chi-squared through Lcurve::light_curve_comp()
-    std::vector<double> compute_chisq() {
-        py::gil_scoped_release release;
-        try {
-            double wdwarf, chisq, wnok, logg1, logg2, rv1, rv2, ffac1, ffac2;
-
-            constexpr bool scale = true;        // autoscale
-            constexpr bool do_copy = false;     // no copy data
-            constexpr bool add_noise = false;   // no noise
-
-            // Call TRM light curve computation
-            Lcurve::light_curve_comp(*model_, *data_, scale, do_copy, add_noise,
-                                     sfac_, fit_, wdwarf, chisq, wnok,
-                                     logg1, logg2, rv1, rv2, ffac1, ffac2);
-
-            return {chisq, logg2, logg1, wdwarf};
-        }
-        catch (const Lcurve::Lcurve_Error& e) {
-            throw std::runtime_error(std::string("TRM Lcurve_Error in compute_chisq: ") + e);
-        }
-        catch (const std::exception& e) {
-            throw std::runtime_error(std::string("Standard exception in compute_chisq: ") + e.what());
-        }
-        catch (...) {
-            throw std::runtime_error("Unknown exception in compute_chisq");
-        }
-    }
-
-    // Get the curent values of the variable parameters
+    // Get the current values of the variable parameters
     std::vector<double> get_params() {
         try {
             Subs::Array1D<double> v = model_->get_param();
@@ -235,8 +262,7 @@ public:
         return model_->nvary();
     }
 
-
-    // Give LCurveWrapper object a visualise command at a specific phase.
+    // Give LCurveWrapper object a visualise command at a specific phase. test
     py::dict visualise_data(double phase)
     {
         // Prepare radii
@@ -407,16 +433,159 @@ public:
         // --------------------------------------------------
     
         py::dict result;
-    
-        result["star1"] = points1;
-        result["star2"] = points2;
+
+        // Output order used for generic Python dict.items() loops.
+        // Alignment will place the later output points on top of the first where overlapping.
+        result["stream"] = points_stream;
+        result["outer_edge"] = points_outer_edge;
         result["bspot"] = points_bspot;
         result["disc"] = points_disc;
-        result["outer_edge"] = points_outer_edge;
-        result["stream"] = points_stream;
+        result["star2"] = points2;
+        result["star1"] = points1;
     
         return result;
     }
+
+    lroche_output calculate_light_curve(const Lcurve::Data& data, bool scale){
+        if (!model_)
+            throw std::runtime_error("Model is null");
+    
+        if (data.empty())
+            throw std::runtime_error("Light curve data is empty");
+    
+        lroche_output result; // Define the data type of "result"
+        
+        try {
+            double wdwarf;
+            double chisq;
+            double wnok;
+            double logg1;
+            double logg2;
+            double rvol1;
+            double rvol2;
+            double ffac1;
+            double ffac2;
+    
+            constexpr bool rdata = true;
+            constexpr bool info = false;
+
+            // Reset scale factors.
+            for (int i = 0; i < 5; ++i){
+                sfac_[i] = 1.0;
+            }
+            
+            {
+                // Release GIL since we aren't doing Python work for a bit.
+                py::gil_scoped_release release;
+
+                Lcurve::light_curve_comp(*model_, data, scale, rdata, info, sfac_, model_flux_,
+                    wdwarf, chisq, wnok, logg1, logg2, rvol1, rvol2, ffac1, ffac2);
+            }
+            
+            // Copy the calculated light curve out of model_flux_
+            // into an ordinary C++ vector.
+            result.model_flux.resize(model_flux_.size());
+    
+            for (int i = 0; i < model_flux_.size(); ++i)
+                result.model_flux[i] = model_flux_[i];
+
+            // Copy scale factors.
+            result.sfac.resize(5);
+            for (int i = 0; i < 5; ++i)
+                result.sfac[i] = sfac_[i];
+            
+            result.chisq  = chisq; // TODO: Add compute_chisq() method to skip unnecessary outputs for emcee
+            result.wnok   = wnok;
+            result.wdwarf = wdwarf;
+    
+            result.logg1 = logg1;
+            result.logg2 = logg2;
+    
+            result.rvol1 = rvol1;
+            result.rvol2 = rvol2;
+    
+            result.ffac1 = ffac1;
+            result.ffac2 = ffac2;
+    
+        }
+        catch (const Lcurve::Lcurve_Error& e) {
+            throw std::runtime_error(std::string("TRM Lcurve_Error in calculate_light_curve: ") + e);
+        }
+        catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Standard exception in calculate_light_curve: ") + e.what());
+        }
+        catch (...) {
+            throw std::runtime_error("Unknown exception in calculate_light_curve");
+        }
+    
+        return result;
+    }
+
+    py::dict compute_light_curve(bool scale)
+    {
+        if (!data_)
+            throw std::runtime_error("No cached data set has been loaded. Use model.set_data(data_array)");
+    
+        lroche_output result = calculate_light_curve(*data_, scale);
+        
+        return make_lroche_output_dict(result);
+    }
+
+    py::dict compute_light_curve(const py::array_t<double, py::array::c_style | py::array::forcecast>& input_data, bool scale){
+        auto buf = input_data.request();
+    
+        if (buf.ndim != 2)
+            throw std::runtime_error("Light curve data must be a 2D NumPy array");
+    
+        if (buf.shape[1] != 6)
+            throw std::runtime_error("Light curve data must have 6 columns");
+    
+        const size_t ndata = buf.shape[0];
+    
+        const double* ptr = static_cast<const double*>(buf.ptr);
+    
+        Lcurve::Data data(ndata);
+    
+        for (size_t i = 0; i < ndata; ++i) {
+    
+            const double* row = ptr + i * 6;
+    
+            data[i].time   = row[0];
+            data[i].expose = row[1];
+            data[i].flux   = row[2];
+            data[i].ferr   = row[3];
+            data[i].weight = row[4];
+            data[i].ndiv   = static_cast<int>(row[5]);
+        }
+
+        lroche_output result = calculate_light_curve(data, scale);
+    
+        return make_lroche_output_dict(result);
+    }
+
+
+    py::dict make_lroche_output_dict(const lroche_output& result){
+        py::dict output;
+    
+        output["model_flux"] = result.model_flux;
+        output["chisq"]      = result.chisq;
+        output["wnok"]       = result.wnok;
+        output["wdwarf"]     = result.wdwarf;
+    
+        output["logg1"]      = result.logg1;
+        output["logg2"]      = result.logg2;
+    
+        output["rvol1"]        = result.rvol1;
+        output["rvol2"]        = result.rvol2;
+    
+        output["ffac1"]      = result.ffac1;
+        output["ffac2"]      = result.ffac2;
+
+        output["sfac"]       = result.sfac;
+        
+        return output;
+    }
+
 };
 
 // Define the stuff you want Python to access here.
@@ -533,17 +702,56 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         .def_readwrite("third", &Lcurve::Model::third);
 
     py::class_<LCurveWrapper>(m, "LCurveModel")
-        .def(py::init<const std::string&, const std::string&>(),
-             py::arg("model_file"),
-             py::arg("data_file"))
-        .def("set_params", &LCurveWrapper::set_params, py::arg("params"))
-        .def("compute_chisq", &LCurveWrapper::compute_chisq)
-        .def("get_params", &LCurveWrapper::get_params)
-        .def("get_param_names", &LCurveWrapper::get_param_names)
-        .def("get_model", &LCurveWrapper::get_model, py::return_value_policy::reference)
-        .def("nvary", &LCurveWrapper::nvary)
-        .def("clone", &LCurveWrapper::clone)
-        .def("write_to_parameters_file", &LCurveWrapper::write_to_parameters_file)
-        .def("visualize_data", &LCurveWrapper::visualise_data, py::arg("phase"));
+        .def(
+            py::init<const std::string&>(),
+            py::arg("model_file")        
+        )
+        .def("set_data",
+            &LCurveWrapper::set_data,
+            py::arg("data")
+        )
+        .def("set_params",
+            &LCurveWrapper::set_params,
+            py::arg("params")
+        )
+        .def("get_params",
+            &LCurveWrapper::get_params
+        )
+        .def("get_param_names",
+            &LCurveWrapper::get_param_names
+        )
+        .def("get_model",
+            &LCurveWrapper::get_model, 
+            py::return_value_policy::reference
+        )
+        .def("nvary",
+            &LCurveWrapper::nvary
+        )
+        .def("clone",
+            &LCurveWrapper::clone
+        )
+        .def("write_to_parameters_file",
+            &LCurveWrapper::write_to_parameters_file
+        )
+        .def("visualize_data",
+            &LCurveWrapper::visualise_data,
+            py::arg("phase")
+        )
+        .def(
+            "compute_light_curve",
+            py::overload_cast<bool>(
+                &LCurveWrapper::compute_light_curve
+            ),
+            py::arg("scale")=true
+        )                
+        .def(
+            "compute_light_curve",
+            py::overload_cast<const py::array_t<double, py::array::c_style | py::array::forcecast>&,bool>(
+                &LCurveWrapper::compute_light_curve
+            ),
+            py::arg("data"),
+            py::arg("scale")=true
+        );
+            
 }
 
