@@ -1,4 +1,4 @@
-ximport sys; sys.path.append("/trm_software/wrapper/")
+import sys; sys.path.append("/trm_software/wrapper/")
 import lcurve_wrapper
 import tempfile
 import os
