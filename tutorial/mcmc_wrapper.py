@@ -19,7 +19,7 @@ Rsol = 6.958e8   # mks
 c = 299792458    # mks
 
 worker_reference_model_parameters = None
-worker_models = None # Each walker gets its own set of LCurve::Model models.
+worker_models = None # Each worker gets its own set of models
 
 def init_worker(base_models_dict):
     """
@@ -36,19 +36,26 @@ def init_worker(base_models_dict):
     worker_reference_model_parameters = next(iter(base_models_dict.values())).summarize_model_parameters()
 
 
-def test_parameters_match_between_models(base_models, fitted_parameter_names):
+def validate_models_before_MCMC(base_models, fitted_parameter_names):
     '''
-    Check non-fitted parameters in each model to confirm they are identical.
-    This ensures that one model isn't using different values than another.
+    Validate the models by checking their parameters before starting an
+        expensive MCMC run.
 
-    Skips filter dependent parameters and fitted parameters.
+    Check non-fitted parameters in each model to confirm they are identical.
+        This ensures that one model isn't using different values than another.
+        Skips filter dependent parameters and fitted parameters.
+
+    Check that model grid fine/coarse grid dimensions match
+    Check that model grid fine/coarse grid dimensions are <= 100
 
     Inputs:
         base_models            : dictionary  {filter: Lcurve_model}
         fitted_parameter_names : 1D array of strings representing parameters to be fitted
 
     Raises:
-        ValueError if not np.isclose() between two model parameter values.
+        ValueError if not np.isclose() between two model parameter values between filters
+        ValueError if stellar surface grid resolution is too high
+        ValueError if fine and coarse stellar surface grid resolutions do not match.
     '''
     if len(base_models) == 1:
         return
@@ -63,6 +70,15 @@ def test_parameters_match_between_models(base_models, fitted_parameter_names):
 
     mismatched_parameters = set()
     for i, model in enumerate(base_models.values()):
+
+        # Require model grid fine/coarse resolution to match
+        if (model.parameters.nlat1c != model.parameters.nlat1f) or (model.parameters.nlat2c != model.parameters.nlat2f):
+            raise ValueError(f"Fine and coarse grids do not match: star1:[{model.parameters.nlat1c}, {model.parameters.nlat1f}]  star2:[{model.parameters.nlat2c}, {model.parameters.nlat2f}]")
+
+        # Do not allow huge grids.
+        if (model.parameters.nlat1f > 120) or (model.parameters.nlat2f > 120):
+            raise ValueError(f"Grid resolution is too high. star1:[{model.parameters.nlat1c}, {model.parameters.nlat1f}]  star2:[{model.parameters.nlat2c}, {model.parameters.nlat2f}]")
+
         
         if i==0:
             reference_parameter_dict = model.summarize_model_parameters()
@@ -76,7 +92,7 @@ def test_parameters_match_between_models(base_models, fitted_parameter_names):
             compare_value = compare_parameter_dict[parameter_name]
             if not np.isclose(reference_value, compare_value):
                 mismatched_parameters.add(parameter_name)
-
+    
     if mismatched_parameters:
         raise ValueError(f"Mismatched parameters between input parameters files: {sorted(mismatched_parameters)}")
     
@@ -222,12 +238,10 @@ def log_probability(theta):
         chi_squared += prior_chisq(theta, lroche_output)
 
     return (-0.5*chi_squared, 
-            {
-                "logg1":lroche_output["logg1"],
-                "logg2":lroche_output["logg2"],
-                "rvol1":lroche_output["rvol1"],
-                "rvol2":lroche_output["rvol2"]
-            }
+            lroche_output["logg1"],
+            lroche_output["logg2"],
+            lroche_output["rvol1"],
+            lroche_output["rvol2"]
            )
 
 def prior_chisq(theta, lroche_output):
@@ -284,17 +298,17 @@ def prior_chisq(theta, lroche_output):
     return chi_squared
     
 
-def main(profile=False):
+def main():
 
-    optimize = True
+    optimize = False
     
     ncores = 32
     nwalkers = 2*ncores # Use at least 2*ncores for efficiency with emcee.moves.RedBlueMove
 
-    nsteps = 500
+    nsteps = 1800
     output_filename = "chain.h5"
 
-    fresh_mcmc = True
+    fresh_mcmc = False
 
     init_param_filename = "init_parameters.txt"
 
@@ -337,7 +351,7 @@ def main(profile=False):
                   }
     
     # Confirm that the non-fitted parameters between filters match.
-    test_parameters_match_between_models(base_models, init_params["parameter_name"])
+    validate_models_before_MCMC(base_models, init_params["parameter_name"])
 
     if optimize:
         print(f"Running simplex optimize with {len(base_models)} filters: {[k for k in base_models]}")
@@ -370,7 +384,7 @@ def main(profile=False):
         sampler = emcee.EnsembleSampler(nwalkers,
                                         ndim,
                                         log_probability,
-                                        parameter_names=init_params["parameter_name"],
+                                        parameter_names=list(init_params["parameter_name"]),
                                         pool=pool,
                                         blobs_dtype=blobs_dtype,
                                         backend=backend,
@@ -381,5 +395,5 @@ def main(profile=False):
 
 
 if __name__ == "__main__":
-
-        main()
+    
+    main()
