@@ -32,12 +32,15 @@ state_params = ["tperiod", "roche1", "roche2", "eclipse1", "eclipse2",
                ]
 
 class Lcurve_model():
-    def __init__(self, parameters_file):
+    def __init__(self, parameters_file, data=None, filter=None):
         self.lcurve = lcurve_wrapper.LCurveModel(parameters_file) # Hosts the C++ model code.
-
         self.parameters = self.lcurve.get_model() # Reference to the model parameters
-        self.data = None # Reference to the current cached data (NumPy array with shape (N, 6))
 
+        self.filter = filter  
+
+        self.data = None
+        if data is not None:
+            self.set_data(data)
         
         for param in fitted_params:
             getattr(self.parameters, param).vary = False
@@ -57,7 +60,16 @@ class Lcurve_model():
         else:
             self.lcurve.write_to_parameters_file(output_filename)
             return output_filename
-        
+
+    
+    def get_variable_parameters(self,):
+        '''
+        Loop over all system parameters.
+        Return a list of parameter names for parameters with vary==True
+        '''
+        return [param for param in fitted_params if getattr(self.parameters, param).vary]                
+    
+    
     def update_parameters(self, new_params):
         '''
         Update the model parameter values.
@@ -92,7 +104,7 @@ class Lcurve_model():
         for param in fitted_params:
             print(f"{param}: {getattr(self.parameters, param).value}")
 
-    def summarize_model(self):
+    def summarize_model_parameters(self):
         '''
         Print the values for all parameters and flags used by the model.
         '''
@@ -108,9 +120,8 @@ class Lcurve_model():
             else:
                 param_dict[param_name] = value
 
-        for param_name, param_value in param_dict.items():
-            print(f"{param_name:>20s}  {param_value}")
-
+        return param_dict
+        
     @staticmethod
     def convert_data_to_array(data):
         '''
@@ -172,7 +183,6 @@ class Lcurve_model():
                                    other_col,
                                    other_col
                                   ]).T
-
         
         if data.ndim != 2:
             raise ValueError(f"Data must be 2-dimensional. Data shape = {data.shape}")
@@ -231,8 +241,7 @@ class Lcurve_model():
         else: # New data provided; convert it to a numpy array then use it temporarily
             data = self.convert_data_to_array(data)
             return self.lcurve.compute_light_curve(data, scale=scale)
-    
-    
+
     def clone(self):
         '''
         Create an independent clone of this model object.
