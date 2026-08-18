@@ -1,188 +1,102 @@
-import os; os.environ["OMP_NUM_THREADS"] = "1" # Avoid oversubscription of resources with OMP
-import shutil
-
 import emcee
-from multiprocessing import Pool
 import numpy as np
+import os; os.environ["OMP_NUM_THREADS"] = "1" # Avoid oversubscription of resources with OMP
 import pandas as pd
-import sys; sys.path.append("/trm_software/wrapper/")
+import shutil # Used to copy chain.h5 as a backup
+
 from datetime import datetime
-import subprocess
+from multiprocessing import Pool
+from scipy.optimize import minimize
 
-# np.random.seed(75)
-
+import sys; sys.path.append("/trm_software/wrapper/")
 import lcurve_wrapper
+from lcurve_model import *
 
 # Define globals accessible to all of the walkers.
 G = 6.673e-11    # mks
 Msol = 1.9891e30 # mks
 Rsol = 6.958e8   # mks
 c = 299792458    # mks
-defaults = {}        # Dictionary to contain values within taken from a provided parameters.txt file.
-worker_models = None # Each walker gets its own set of LCurve::Model models. See the "init_worker()" function
 
-# List of all adjustable model parameters in their required order.
-all_params = ["q", "iangle", "r1", "r2", "r3", "cphi3", "cphi4", "spin1", "spin2", "t1", "t2", "t3",
-              "ldc1_1", "ldc1_2", "ldc1_3", "ldc1_4", "ldc2_1", "ldc2_2", "ldc2_3", "ldc2_4", "ldc3_1", "ldc3_2", "ldc3_3", "ldc3_4",
-              "velocity_scale", "beam_factor1", "beam_factor2",
-              "t0", "period", "pdot", "deltat", "gravity_dark1", "gravity_dark2", "absorb",
-              "slope", "quad", "cube",
-              "rdisc1", "rdisc2", "height_disc", "beta_disc", "temp_disc", "texp_disc", "lin_limb_disc", "quad_limb_disc", "temp_edge", "absorb_edge",
-              "radius_spot", "length_spot", "height_spot", "expon_spot", "epow_spot", "angle_spot", "yaw_spot", "temp_spot", "tilt_spot", "cfrac_spot",
-              "stsp11_long", "stsp11_lat", "stsp11_fwhm", "stsp11_tcen",
-              "stsp12_long", "stsp12_lat", "stsp12_fwhm", "stsp12_tcen",
-              "stsp13_long", "stsp13_lat", "stsp13_fwhm", "stsp13_tcen",
-              "stsp21_long", "stsp21_lat", "stsp21_fwhm", "stsp21_tcen",
-              "stsp22_long", "stsp22_lat", "stsp22_fwhm", "stsp22_tcen",
-              "stsp1i_long", "stsp1i_lat", "stsp1i_fwhm_long", "stsp1i_fwhm_lat", "stsp1i_escale_len", "stsp1i_tcen",
-             ]
-
-param_map = {k:i for i,k in enumerate(all_params)}
+worker_reference_model_parameters = None
+worker_models = None # Each walker gets its own set of LCurve::Model models.
 
 def init_worker(base_models_dict):
     """
-    When calling emcee with Pool:
-        Initialize the worker, giving it its own set of filter-dependent models to play with
-
+    Initialize worker namespace
+    Each worker is given its own set of N Lcurve_models to play with.
+        where N is the number of filters.
+        
     Clones the base LCurve::Model directly.
-    This avoids having to create/destroy a new set of models every iteration
+    This avoids having to create/destroy a new set of models for every MCMC iteration
     """
     global worker_models
+    global worker_reference_model_parameters
     worker_models = {filter: model.clone() for filter, model in base_models_dict.items()}
+    worker_reference_model_parameters = next(iter(base_models_dict.values())).summarize_model_parameters()
 
-    # for i,k in enumerate(worker_models):
-        # print(k, worker_models[k].model.get_param_names())
 
-class lcurve_model():
-    def __init__(self, parameters_file, data_file, free_params, filter):
-        '''
-        Lcurve::Model  https://github.com/trmrsh/cpp-lcurve/blob/master/include/trm/lcurve.h#L249
+def test_parameters_match_between_models(base_models, fitted_parameter_names):
+    '''
+    Check non-fitted parameters in each model to confirm they are identical.
+    This ensures that one model isn't using different values than another.
 
-        Build an LCurve::Model object with access to the legacy C++ methods:
-            "compute_chisq", "get_model", "get_param_names", "get_params", "nvary", "set_params"
+    Skips filter dependent parameters and fitted parameters.
 
-        See: "/trm_software/wrapper/wrapper.cpp" within the apptainer image for details.
+    Inputs:
+        base_models            : dictionary  {filter: Lcurve_model}
+        fitted_parameter_names : 1D array of strings representing parameters to be fitted
 
-        Parameters:
-            parameters_file : string
-                parameters.txt file
+    Raises:
+        ValueError if not np.isclose() between two model parameter values.
+    '''
+    if len(base_models) == 1:
+        return
 
-            data_file : string
-                5-column space delimited LCURVE format light curve data file
+    filter_dependent_parameters = ["ldc1_1", "ldc1_2", "ldc1_3", "ldc1_4",
+                                   "ldc2_1", "ldc2_2", "ldc2_3", "ldc2_4",
+                                   "ldc3_1", "ldc3_2", "ldc3_3", "ldc3_4",
+                                   "beam_factor1", "beam_factor2",
+                                   "gravity_dark1", "gravity_dark2",
+                                   "slope", "quad", "cube",
+                                   "wavelength", "filter"]
 
-            free_params : numpy array of strings
-                list of free parameter names
-
-            filter : string
-                filter being used to build the model and represent the data
-
-        Attributes:
-            self.free_params : numpy array of strings
-                Contains parameter names: ["q", "iangle", "t2", "height_disc", ...]
-
-            self.filter : string
-                Filter used with the data and model
-
-            self.model : <class 'lcurve_wrapper.LCurveModel'>
-                Legacy C++ LCurve::Model class object
-
-            self.model_object : <class 'lcurve_wrapper.Model'>
-                LCurve::Model wrapper. Used to communicate individual parameter value changes
-
-            self.relevant_params_dict : dict{string: int}
-                Relevant parameters taken from the full list of fitted parameters.
-                We can fit filter-dependent parameters. Here we exlude parameters that use a filter not matching this model's self.filter attribute
-
-            self.relevant_params_indices : Numpy array of integers
-                A simple array of indices used to filter the theta vector given by emcee on each iteration
-                self.relevant_params_dict.values()
-        '''
-        self.free_params = free_params
-        self.filter = filter
-        self.model = lcurve_wrapper.LCurveModel(parameters_file, data_file)
-        self.model_object = self.model.get_model() # The model object used to modify parameters individually
-
-        # Set all parameter.vary to False
-        for param in all_params:
-            getattr(self.model_object, param).vary = False
-
-        # Extract list indices for relevant parameters. Used to set parameters later
-        self.relevant_params_dict = {}
-        for i, param in enumerate(free_params):
-            param = str(param)
-            if param.endswith(f"_{self.filter}"): # Filter-dependent parameter needs to have the "_filter" part removed now.
-                param = param[:-(len(self.filter)+1)]
-
-            if param in all_params:
-                self.relevant_params_dict[param] = i
-                getattr(self.model_object, param).vary = True
-
-        self.relevant_indices = np.array(list(self.relevant_params_dict.values()))
-    
-    def get_chi_squared(self, theta): # __call__
-        '''
-        Given a set of model parameters:
-            1) Update the model parameters using "set_params()"
-            2) Call "compute_chisq()":
-                    *) Build the model light curve (C++)
-                    *) Calculate chi-squared (C++)
-                    *) Returns chi-squared, flux-weighted surface gravities, and flux2 contribution
-            3) Return chi-squared, flux-weighted surface gravities, and flux2 contribution
-        '''
-        # try:
-        #     self.model.set_params(theta[self.relevant_indices])
-        #     # self.save_parameter_file()
-        # except RuntimeError as err:
-        #     print("Model set_params() failed: ",err)
-        #     return np.inf, None, None, None
-        # for param in all_params:
-        #     print(param, getattr(self.model_object, param).value)
-
+    mismatched_parameters = set()
+    for i, model in enumerate(base_models.values()):
         
-        # Update parameters one by one, rather than all at once
-        for key, value in self.relevant_params_dict.items():
-            # print(f"Updating  {key}  ->  {theta[value]}")
-            getattr(self.model_object, key).value = theta[value]
-        
-        # cmd = f"lroche parameters_del_{self.filter}.txt lcs/frank_{self.filter}.txt 0 57234 0 none yes"
-        # output, error = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).communicate();
-        # print(output)        
-        # print("="*60)
-        try:
-            chi_squared, logg2, logg1, flux2_contribution = self.model.compute_chisq()
-        except Exception as err:
-            print("Model compute_chisq() failed: ",err)
-            return np.inf, None, None, None
+        if i==0:
+            reference_parameter_dict = model.summarize_model_parameters()
+            continue
 
-        return chi_squared, logg2, logg1, flux2_contribution
+        compare_parameter_dict = model.summarize_model_parameters()
+        for parameter_name, reference_value in reference_parameter_dict.items():
+            if parameter_name in list(fitted_parameter_names) + list(filter_dependent_parameters):
+                continue
 
-    def save_parameter_file(self,):
-        ofilename = f"parameters_{self.filter}.txt"
-        self.model.write_to_parameter_file(ofilename)
+            compare_value = compare_parameter_dict[parameter_name]
+            if not np.isclose(reference_value, compare_value):
+                mismatched_parameters.add(parameter_name)
+
+    if mismatched_parameters:
+        raise ValueError(f"Mismatched parameters between input parameters files: {sorted(mismatched_parameters)}")
     
-    def clone(self):
-        '''
-        Create an independent clone of this class for model modifications.
-        '''
-        # Create a blank lcurve_model object with no attributes, skipping the __init__ call by using __new__
-        cloned_model = lcurve_model.__new__(lcurve_model)
-
-        # Manually assign attributes to the clone using attributes from the base model.
-        cloned_model.model = self.model.clone() # Clones the C++ LCurve::Model, sharing a reference to the light curve data
-        cloned_model.model_object = cloned_model.model.get_model() # Run get_model() on the cloned object, not cloning the original's get_model()
-        cloned_model.free_params = self.free_params
-        cloned_model.filter = self.filter
-        cloned_model.relevant_params_dict = self.relevant_params_dict
-        cloned_model.relevant_indices = self.relevant_indices
-
-        return cloned_model
+    return
 
 def run_optimize(theta0, variable_parameters):
     '''
     Minimize chi-squared (-2*log_probability) of the combined multi-filter model
-    '''
-    from scipy.optimize import minimize
-    
+
+    Used with the optimize option.
+    Replacement for simplex, with support for multi-filter and priors.
+
+    Approximates convergence with Nelder-Mead algorithm using 
+    approximately 1% change in optimal chi-squared between iterations as convergence.
+
+    Input:
+        theta0 : 2D np.ndarray of floats representing parameter values of each walker.
+        variable_parameters : array of strings
+                              representing parameter names in the same order as theta0
+    '''    
     theta0 = np.average(theta0, axis=0)
 
     print("="*40)
@@ -190,21 +104,29 @@ def run_optimize(theta0, variable_parameters):
     for i,k in enumerate(variable_parameters):
         print(f"  {k:<20s}  {theta0[i]:.5f}")
 
-    fxn = lambda x: -2*log_probability(x, variable_parameters)[0]
-    results = minimize(fxn, theta0, method="Nelder-Mead", options={"maxiter":200, "fatol":0.01})
+    N_data = sum(len(model.data) for model in worker_models.values())
+    print(N_data)
+    N_variable = len(variable_parameters)
+    
+    fxn = lambda x: -2*log_probability( dict(zip(variable_parameters, x)) )[0]
+    results = minimize(fxn,
+                       theta0,
+                       method="Nelder-Mead",
+                       options={"maxiter":2000,
+                                "fatol":0.01*(N_data - N_variable),
+                                "xatol":np.inf,
+                                "disp":True,
+                                }
+                       )
+
     theta_best = results.x
     print("="*40)
     print("Final parameters:")
     for i,k in enumerate(variable_parameters):
         print(f"  {k:<20s}  {theta0[i]:.5f}  ->  {theta_best[i]:.5f}")
     print("="*40)
-    print(f"chi-squared = {results.fun}")
-    print(f"number of iterations = {results.nit}")
-    print("="*40)
-    print(f"Optimizer exit message: {results.message}")
     
     return theta_best
-
 
 def uniform_prior(parameter_value, lower, upper):
     '''
@@ -215,175 +137,164 @@ def uniform_prior(parameter_value, lower, upper):
     '''
     if parameter_value < lower or parameter_value > upper:
         return np.inf
-
     return 0.0
-
-def gaussian_prior_symmetric(walker_value, observed_value, observed_sigma):
+    
+def gaussian_prior_symmetric(walker_value, prior_value, prior_sigma):
     '''
     Gaussian prior with symmetric lower and upper sigma values
-    '''
-    return ((walker_value - observed_value)/observed_sigma)**2
 
-def gaussian_prior_asymmetric(walker_value, observed_value, observed_sigma_lower, observed_sigma_upper):
+    Input:
+        walker_value : float
+                       Parameter value being tested by the walker.
+        prior_value  : float
+                       Parameter value from prior information.
+        prior_sigma  : float
+                       Parameter uncertainty from prior information.    
     '''
-    Gaussian prior with different observed lower and upper sigma values
+    return ((walker_value - prior_value)/prior_sigma)**2
+
+def gaussian_prior_asymmetric(walker_value, prior_value, prior_sigma_lower, prior_sigma_upper):
     '''
-    if walker_value > observed_value:
-        return ((walker_value - observed_value)/observed_sigma_upper)**2
+    Piecewise Gaussian approximation to an asymmetric prior.
+
+    Input:
+        walker_value       : float
+                             Parameter value being tested by the walker.
+        prior_value        : float
+                             Parameter value from prior information.
+        prior_sigma_lower  : float
+                             Parameter uncertainty from prior information.    
+                             ~14-percentile from Gaussian distribution
+        prior_sigma_upper  : float
+                             Parameter uncertainty from prior information.    
+                             ~86-percentile from Gaussian distribution
+    '''
+    if walker_value < prior_value:
+        prior_sigma = prior_sigma_lower
     else:
-        return ((walker_value - observed_value)/observed_sigma_lower)**2
+        prior_sigma = prior_sigma_upper
 
-def get_parameter(parameter_name, theta, variable_parameters):
+    return ((walker_value - prior_value)/prior_sigma)**2
+
+def log_probability(theta):
     '''
-    Extract the parameter value (float) from the theta vector provided by emcee
-    Uses the variable_parameters array to determine the parameter's index
-
-    Returns first satisfied of:
-        1) The parameter value taken from theta (new parameter values suggested by emcee)
-        2) The parameter value taken from the global "defaults" dictionary (static parameters.txt file)
-        3) None
-    '''
-    global defaults
-
-    if parameter_name in variable_parameters:
-        index = np.where(variable_parameters==parameter_name)[0][0]
-        return theta[index], True
-    elif parameter_name in defaults:
-        return defaults[parameter_name], False
-    else:
-        return None, False
-
-def log_prior(theta, variable_parameters, logg2, logg1):
-    '''
-    Return chi-squared using prior information.
-
-    TODO?: Make this a "log_prior" class with attributes for
-            total chi-squared, methods for uniform/gaussian,
-            __init__ takes theta and variable_parameters,
-            use properties for masses, velocities, etc
-
-    Inputs:
-        theta : np.array of floats
-            np.array of parameter values from emcee
-        variable_parameters : np.array of strings
-            variable parameter names
-        logg2 : float
-            flux-weighted surface gravity of star2 taken from the lroche output
-        logg1 : float
-            flux-weighted surface gravity of star1 taken from the lroche output
-
-    Returns:
-        chi_squared : float or +np.inf
-    '''
-    chi_squared = 0.0
-
-    # Inclination uniform prior
-    iangle, fit_iangle = get_parameter("iangle", theta, variable_parameters)
-    chi_squared += uniform_prior(iangle, 0.0, 90.0) if fit_iangle else 0.0
+    Calculate log-likelihood for the set of parameters
+        Update parameter values.
+        Sums the chi-squared from lroche output across all filters
+        Adds chi-squared from prior_chisq() call.
     
-    # Temperature priors
-    t1, fit_t1 = get_parameter("t1", theta, variable_parameters)
-    chi_squared += uniform_prior(t1, 500, 100000) if fit_t1 else 0.0
-    chi_squared += gaussian_prior_symmetric(t1, 28900, 400) if fit_t1 else 0.0
-
-    t2, fit_t2 = get_parameter("t2", theta, variable_parameters)
-    chi_squared += uniform_prior(t2, 500, 100000) if fit_t2 else 0.0
-
-    if np.isinf(chi_squared):
-        return np.inf
-
-    use_priors = True
-    if not use_priors:
-        return chi_squared
-
-    # Priors based on physical constraints
-    period, fit_period   = get_parameter("period", theta, variable_parameters)
-    q, fit_q             = get_parameter("q", theta, variable_parameters)
-    vscale, fit_vscale   = get_parameter("velocity_scale", theta, variable_parameters)
-
-    k1 =  q/(1+q)*vscale*np.sin(np.radians(iangle))                   # km/s
-    k2 =  1./(1+q)*vscale*np.sin(np.radians(iangle))                  # km/s
-    a  =  period*(86400)/(2*np.pi)*(vscale*1000)/Rsol                 # Rsol; assumes circular orbit
-    M1 =  1./(1+q)*(period*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol   # Msol
-    M2 =  q/(1+q)*(period*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol    # Msol
-
-    chi_squared += gaussian_prior_symmetric(k1, 71.6, 1.7)
-
-    G_cgs = 6.6743e-8
-    Msun_cgs = 1.9885e33
-    Rsun_cgs = 6.9634e10
-
-    logg_prior = True
-    if logg_prior:
-        
-        # If the star is spherical, then we can use r1=r1_vol for a logg prior.
-        r1, fit_r1 = get_parameter("r1", theta, variable_parameters)
-
-        if fit_r1 or fit_q or fit_vscale:
-            R1vol_cgs = r1 * (a*Rsun_cgs) # cgs
-            M1_cgs = M1 * Msun_cgs        # cgs
-        
-            g1 = G_cgs * M1_cgs / R1vol_cgs**2
-            logg1 = np.log10(g1)
-            chi_squared += gaussian_prior_symmetric(logg1, 5.64, 0.02)
-    
-    return chi_squared
-
-
-def log_probability(theta, variable_parameters):
-    '''
-    Calculate log-probability for the set of parameters theta.
-    Adds the chi-squared from the LCurve::Model evaluation with the chi-squared from log_prior() function.
-
     Inputs:
-        theta : np.array of floats
-            vector of suggested parameter values from emcee
-        variable_parameters : np.array of strings
-            variable parameter names
+        theta : Python dictionary of fitted parameters
+                May contain filter-specific names, such as "ldc1_1_R" and "ldc1_1_V"
 
     Returns:
         -0.5 * chi_squared
     '''
     chi_squared = 0.0
-    debug = False
+
+    filters = worker_models.keys()
     
-    # Loop over filters
-    # TODO: Add another Pool here to parallel the filters?
-    for filter, model in worker_models.items():
-        model_chi_squared, logg2, logg1, flux2_contribution = model.get_chi_squared(theta)
-        chi_squared += model_chi_squared
-        # print(filter, model_chi_squared, datetime.now()) if debug else None
-    # Include priors
+    for filter, model in worker_models.items(): 
+        for parameter_name_F, suggested_value in theta.items():
+
+            if (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] != model.filter):
+                continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
+                
+            elif (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F_split("_")[-1] == model.filter):
+                parameter_name = "_".join(parameter_name0.split("_")[:-1]) # Remove the "_{filter}" text from the parameter name
+
+            else: # Not a filter-specific parameter, so use the parameter name as-is
+                parameter_name = parameter_name_F
+
+            getattr(model.parameters, parameter_name).value = suggested_value # Set each parameter
+            
+        try:
+            lroche_output = model.lroche(scale=True)
+            chi_squared += lroche_output["chisq"]
+        except Exception as err:
+            print(f"model.lroche() failed.\n{type(err).__name__}: {err}")
+            chi_squared += np.inf
+
+        if np.isinf(chi_squared):
+            return -np.inf
+    
     if not np.isinf(chi_squared):
-        chi_squared += log_prior(theta, variable_parameters, logg2, logg1)
+        chi_squared += prior_chisq(theta, lroche_output)
 
-    # print("  Total chi2 =",-0.5 * chi_squared, datetime.now()) if debug else None
-    # print(f"  theta = {theta}") if debug else None
-    return (-0.5 * chi_squared,)
+    return (-0.5*chi_squared, 
+            {
+                "logg1":lroche_output["logg1"],
+                "logg2":lroche_output["logg2"],
+                "rvol1":lroche_output["rvol1"],
+                "rvol2":lroche_output["rvol2"]
+            }
+           )
 
-def get_parameter_order(parameter_name, filters):
+def prior_chisq(theta, lroche_output):
     '''
-    Using the legacy C++ set_param() method requires that the list of variable parameter be in a specific order.
-    Here we find the index/position that each fitted parameter should be in to match the required order.
-    This handles filter-dependent parameters by stripping them of the "{_filter}" before matching.
+    Return chi-squared using prior information.
+
+    Inputs:
+        theta : Python dictionary of fitted parameters
+                May contain filter-specific names, such as "ldc1_1_R" and "ldc1_1_V"
+        lroche_output : dictionary
+            keys = ['model_flux', 'chisq', 'wnok', 'wdwarf', 'logg1', 'logg2', 'rvol1', 'rvol2', 'ffac1', 'ffac2', 'sfac']
+        
+    Returns:
+        chi_squared : float or np.inf
     '''
-    for filter in filters:
-        if parameter_name.endswith(f"_{filter}"):
-            parameter_name = parameter_name[:-(len(filter)+1)]
-            break
-    return param_map[parameter_name]
+    chi_squared = 0.0
+
+    if "iangle" in theta:
+        chi_squared += uniform_prior(theta["iangle"], 0.0, 90.0)
+
+    if "t1" in theta:
+        chi_squared += gaussian_prior_symmetric(theta["t1"], 28_900, 400)
+
+    if "t2" in theta:
+        chi_squared += uniform_prior(theta["t2"], 500, 50_000)
+
+    if np.isinf(chi_squared):
+        return np.inf
+
+
+    use_physical_priors = True
+    if not use_physical_priors:
+        return chi_squared
+    
+    # Priors based on physical constraints
+    period_days = worker_reference_model_parameters["tperiod"]
+
+    # Use fixed reference value from model parameters if not being fitted, else use the current iteration's fit value.
+    q      = theta["q"] if "q" in theta else worker_reference_model_parameters["q"]
+    vscale = theta["velocity_scale"] if "velocity_scale" in theta else worker_reference_model_parameters["velocity_scale"]
+    iangle = theta["iangle"] if "iangle" in theta else worker_reference_model_parameters["iangle"]
+
+    a  =  period_days*(86400)/(2*np.pi)*(vscale*1000)/Rsol               # Rsol; assumes circular orbit
+    R1vol = lroche_output["rvol1"] * a
+    R2vol = lroche_output["rvol2"] * a
+    K1 =  q/(1+q)*vscale*np.sin(np.radians(iangle))                      # km/s
+    K2 =  1./(1+q)*vscale*np.sin(np.radians(iangle))                     # km/s
+    M1 =  1./(1+q)*(period_days*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol # Msol
+    M2 =  q/(1+q)*(period_days*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol  # Msol
+
+    chi_squared += gaussian_prior_symmetric(K1, 71.6, 1.7)
+    chi_squared += gaussian_prior_symmetric(lroche_output["logg1"], 5.64, 0.02)
+    
+    return chi_squared
+    
 
 def main(profile=False):
 
-    optimize = False
+    optimize = True
     
     ncores = 32
     nwalkers = 2*ncores # Use at least 2*ncores for efficiency with emcee.moves.RedBlueMove
 
-    nsteps = 1750
+    nsteps = 500
     output_filename = "chain.h5"
 
-    fresh_mcmc = False
+    fresh_mcmc = True
 
     init_param_filename = "init_parameters.txt"
 
@@ -396,30 +307,15 @@ def main(profile=False):
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ================================================================================
 
-
-    # Populate the global defaults dictionary with values in the first of the provided parameters.txt files.
-    with open(parameters_file.format(filters[0]), "r") as ifile:
-        for line in ifile.readlines():
-            if "=" in line:
-                k = line.split()
-                if len(k) < 4 and not line.startswith("tperiod"):
-                    continue
-                defaults[k[0]] = float(k[2])
-
     # Read the to-be fitted parameters and their lower and upper bounds for randomization.
     init_params = np.loadtxt(init_param_filename, dtype=[("parameter_name", "U20"),
                                                          ("lower_limit", np.float64),
-                                                         ("upper_limit", np.float64)]
-                                                        )
+                                                         ("upper_limit", np.float64)
+                                                        ]
+                            )
     ndim = len(init_params)
-
-    # Re-order init_params to match the required order for the legacy LCurve::Model::set_param() method
-    init_params = init_params[
-        np.argsort(
-            [get_parameter_order(name, filters) for name in init_params["parameter_name"]]
-        )
-    ]
     print(f"Using {ndim} free parameters: {init_params['parameter_name']}")
+
 
     if not os.path.isfile(output_filename):
         fresh_mcmc = True
@@ -430,10 +326,18 @@ def main(profile=False):
             np.random.uniform(init_params["lower_limit"][i], init_params["upper_limit"][i]) for i in range(len(init_params))
         ] for n in range(nwalkers)
     ]
-    state = p0 if fresh_mcmc else None
-
-    # Generate a set of models to use as a basis for modification. These depend on your provided parameters.txt files for the "wavelength", LDC/GDC, and beaming values
-    base_models = {filter: lcurve_model(parameters_file.format(filter), data_file.format(filter), init_params["parameter_name"], filter) for filter in filters}
+    state = p0 if fresh_mcmc else None    
+    
+    # Generate a set of models to use as a base for modification.
+    # These depend on your provided parameters.txt files to allow different wavelength, LDC/GDC, and beaming values
+    base_models = {filter: Lcurve_model(parameters_file.format(filter),
+                                        data=data_file.format(filter),
+                                        filter=filter)
+                   for filter in filters
+                  }
+    
+    # Confirm that the non-fitted parameters between filters match.
+    test_parameters_match_between_models(base_models, init_params["parameter_name"])
 
     if optimize:
         print(f"Running simplex optimize with {len(base_models)} filters: {[k for k in base_models]}")
@@ -441,20 +345,6 @@ def main(profile=False):
         
         simplex_solution = run_optimize(p0, init_params["parameter_name"])
         sys.exit()
-    
-    if profile:
-        backend = emcee.backends.HDFBackend(output_filename)
-        backend.reset(nwalkers, ndim)
-        sampler = emcee.EnsembleSampler(nwalkers,
-                                        ndim,
-                                        log_probability,
-                                        args=(init_params["parameter_name"],),
-                                        backend=backend,
-                                       )
-        sampler.run_mcmc(p0, nsteps, progress=False)
-
-        return
-
 
     # Generate workers, each with their own set of models to modify in memory.
     with Pool(ncores, initializer=init_worker, initargs=(base_models,)) as pool:
@@ -467,31 +357,29 @@ def main(profile=False):
                 shutil.copy(output_filename, f"bk_{output_filename}")
             backend.reset(nwalkers, ndim)
 
-        # Initialize the sampler. TODO: include parameter_names -> update log_probability to accept a dict for convenience
+        # Data type for the extra output stored with the walker positions.
+        # Must be in the same order as the log_probability() output
+        blobs_dtype = [
+            ("logg1", float),
+            ("logg2", float),
+            ("rvol1", float),
+            ("rvol2", float),
+        ]
+        
+        # Initialize the sampler.
         sampler = emcee.EnsembleSampler(nwalkers,
                                         ndim,
                                         log_probability,
-                                        args=(init_params["parameter_name"],),
+                                        parameter_names=init_params["parameter_name"],
                                         pool=pool,
+                                        blobs_dtype=blobs_dtype,
                                         backend=backend,
                                        )
+        
+        # Run the sampler to completion.
         sampler.run_mcmc(state, nsteps, progress=False)
 
 
 if __name__ == "__main__":
 
-    profile = False
-    if profile:
-        print("Running cProfile", flush=True)
-        profile_filename = "profile_wrapper.prof"
-        import cProfile
-        cProfile.run("main(profile=True)", profile_filename)
-
-        import pstats
-        p = pstats.Stats(profile_filename)
-        p.sort_stats("cumulative").print_stats(30)
-        # Note: _thread.lock() is misleading since it includes all work done by the Pool, so we do not use Pool when profiling
-        # backend writes appear to be at least 0.02s per step
-        # Each compute_chisq() seems to be about 2.75s per call (5.5s for two filters, 11s for four filters). depends on grid resolution
-    else:
         main()
