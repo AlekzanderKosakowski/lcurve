@@ -121,7 +121,7 @@ def run_optimize(theta0, variable_parameters):
         print(f"  {k:<20s}  {theta0[i]:.5f}")
 
     N_data = sum(len(model.data) for model in worker_models.values())
-    print(N_data)
+
     N_variable = len(variable_parameters)
     
     fxn = lambda x: -2*log_probability( dict(zip(variable_parameters, x)) )[0]
@@ -211,7 +211,7 @@ def log_probability(theta):
     filters = worker_models.keys()
     
     for filter, model in worker_models.items(): 
-        for parameter_name_F, suggested_value in theta.items():
+        for parameter_name_F, walker_value in theta.items():
 
             if (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] != model.filter):
                 continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
@@ -222,15 +222,26 @@ def log_probability(theta):
             else: # Not a filter-specific parameter, so use the parameter name as-is
                 parameter_name = parameter_name_F
 
-            getattr(model.parameters, parameter_name).value = suggested_value # Set each parameter
+            getattr(model.parameters, parameter_name).value = walker_value # Set each parameter
             
         try:
             lroche_output = model.lroche(scale=True)
-            chi_squared += lroche_output["chisq"]
         except Exception as err:
             print(f"model.lroche() failed.\n{type(err).__name__}: {err}")
-            chi_squared += np.inf
-
+            lroche_output = {"model_flux":np.ones(len(model.data)),
+                             "chisq":np.inf,
+                             "wdwarf":0.0,
+                             "wnok":0.0,
+                             "logg1":0.0,
+                             "logg2":0.0,
+                             "rvol1":0.0,
+                             "rvol2":0.0,
+                             "ffac1":0.0,
+                             "ffac2":0.0,
+                             "sfac":np.ones(5),
+                             }
+            
+        chi_squared += lroche_output["chisq"]
         if np.isinf(chi_squared):
             return -np.inf
     
@@ -305,8 +316,8 @@ def main():
     ncores = 32
     nwalkers = 2*ncores # Use at least 2*ncores for efficiency with emcee.moves.RedBlueMove
 
-    nsteps = 1800
-    output_filename = "chain.h5"
+    nsteps = 500
+    output_filename = "chain500.h5"
 
     fresh_mcmc = False
 
