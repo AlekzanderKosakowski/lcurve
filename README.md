@@ -4,6 +4,8 @@ Modified copy of Tom Marsh's source code used for "lcurve". For the full set of 
 
 Modifications are described below.
 
+An lcurve workflow tutorial is provided in a Jupyter notebook within the tutorial directory (see <a href=https://github.com/AlekzanderKosakowski/lcurve/blob/main/tutorial/tutorial_wrapper.ipynb>tutorial_wrapper.ipynb</a>)
+
 ### 1) "visualise" colors:
 
 visualise.cc now plots colors based on surface element temperature, normalized by the [min_temperature, max_temperature] of all of the surface elements across star1 and star2 together.
