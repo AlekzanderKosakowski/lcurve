@@ -226,24 +226,13 @@ def log_probability(theta):
             
         try:
             lroche_output = model.lroche(scale=True)
+            chi_squared += lroche_output["chisq"]
         except Exception as err:
-            print(f"model.lroche() failed.\n{type(err).__name__}: {err}")
-            lroche_output = {"model_flux":np.ones(len(model.data)),
-                             "chisq":np.inf,
-                             "wdwarf":0.0,
-                             "wnok":0.0,
-                             "logg1":0.0,
-                             "logg2":0.0,
-                             "rvol1":0.0,
-                             "rvol2":0.0,
-                             "ffac1":0.0,
-                             "ffac2":0.0,
-                             "sfac":np.ones(5),
-                             }
-            
-        chi_squared += lroche_output["chisq"]
+            print(f">>>> model.lroche() failed.\n{type(err).__name__}: {err}")
+            return -np.inf, 0.0, 0.0, 0.0, 0.0
+
         if np.isinf(chi_squared):
-            return -np.inf
+            return -np.inf, 0.0, 0.0, 0.0, 0.0
     
     if not np.isinf(chi_squared):
         chi_squared += prior_chisq(theta, lroche_output)
