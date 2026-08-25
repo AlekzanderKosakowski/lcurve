@@ -12,11 +12,10 @@ import sys; sys.path.append("/trm_software/wrapper/")
 import lcurve_wrapper
 from lcurve_model import *
 
-# Define globals accessible to all of the walkers.
+# Define globals accessible to all of the workers.
 G = 6.673e-11    # mks
 Msol = 1.9891e30 # mks
 Rsol = 6.958e8   # mks
-c = 299792458    # mks
 
 worker_reference_model_parameters = None
 worker_models = None # Each worker gets its own set of models
@@ -119,6 +118,7 @@ def run_optimize(theta0, variable_parameters):
     print("Starting parameters:")
     for i,k in enumerate(variable_parameters):
         print(f"  {k:<20s}  {theta0[i]:.5f}")
+    print("="*40)
 
     N_data = sum(len(model.data) for model in worker_models.values())
 
@@ -134,7 +134,6 @@ def run_optimize(theta0, variable_parameters):
                                 "disp":True,
                                 }
                        )
-
     theta_best = results.x
     print("="*40)
     print("Final parameters:")
@@ -231,7 +230,7 @@ def log_probability(theta):
             print(f">>>> model.lroche() failed.\n{type(err).__name__}: {err}")
             return -np.inf, 0.0, 0.0, 0.0, 0.0
 
-        if np.isinf(chi_squared):
+        if np.isinf(chi_squared) or np.isnan(chi_squared):
             return -np.inf, 0.0, 0.0, 0.0, 0.0
     
     if not np.isinf(chi_squared):
@@ -250,7 +249,7 @@ def prior_chisq(theta, lroche_output):
 
     Inputs:
         theta : Python dictionary of fitted parameters
-                May contain filter-specific names, such as "ldc1_1_R" and "ldc1_1_V"
+            May contain filter-specific names, such as "ldc1_1_R" and "ldc1_1_V"
         lroche_output : dictionary
             keys = ['model_flux', 'chisq', 'wnok', 'wdwarf', 'logg1', 'logg2', 'rvol1', 'rvol2', 'ffac1', 'ffac2', 'sfac']
         
@@ -264,13 +263,13 @@ def prior_chisq(theta, lroche_output):
 
     if "t1" in theta:
         chi_squared += gaussian_prior_symmetric(theta["t1"], 28_900, 400)
+        chi_squared += uniform_prior(theta["t1"], 18900, 38900)
 
     if "t2" in theta:
         chi_squared += uniform_prior(theta["t2"], 500, 50_000)
 
     if np.isinf(chi_squared):
         return np.inf
-
 
     use_physical_priors = True
     if not use_physical_priors:
@@ -302,21 +301,26 @@ def main():
 
     optimize = False
     
-    ncores = 32
-    nwalkers = 2*ncores # Use at least 2*ncores for efficiency with emcee.moves.RedBlueMove
-
-    nsteps = 500
-    output_filename = "chain500.h5"
-
-    fresh_mcmc = False
-
-    init_param_filename = "init_parameters.txt"
-
     parameters_file = "parameters_files/parameters_simplex_{}.txt"
     data_file = "data_files/ec10246-2707_noise_model_{}.txt"
-    filters = ["V"]
+    filters = ["B"]
 
+    init_param_filename = "init_parameters.txt"
+    
+    ncores = 32
+    nwalkers = 2*ncores # Use at least 2*ncores for emcee.moves.RedBlueMove
 
+    nsteps = 50000
+
+    output_filename = "chain.h5"
+    fresh_mcmc = True
+
+    use_default_emcee_moves = False
+    emcee_moves = [ # https://emcee.readthedocs.io/en/stable/user/moves/
+        (emcee.moves.DEMove(), 0.70),
+        (emcee.moves.DESnookerMove(), 0.30),
+    ]
+    
     # ================================================================================
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # ================================================================================
@@ -330,7 +334,6 @@ def main():
     ndim = len(init_params)
     print(f"Using {ndim} free parameters: {init_params['parameter_name']}")
 
-
     if not os.path.isfile(output_filename):
         fresh_mcmc = True
 
@@ -340,7 +343,6 @@ def main():
             np.random.uniform(init_params["lower_limit"][i], init_params["upper_limit"][i]) for i in range(len(init_params))
         ] for n in range(nwalkers)
     ]
-    state = p0 if fresh_mcmc else None    
     
     # Generate a set of models to use as a base for modification.
     # These depend on your provided parameters.txt files to allow different wavelength, LDC/GDC, and beaming values
@@ -349,6 +351,13 @@ def main():
                                         filter=filter)
                    for filter in filters
                   }
+
+    # Validate that all starting walker positions are allowed.
+    if fresh_mcmc:
+        init_worker(base_models)
+        initial_probs = [log_probability(dict(zip(init_params["parameter_name"], p0_i))) for p0_i in p0]        
+        if np.any(np.isinf(initial_probs)):
+            raise ValueError("Some walkers start in invalid parameter space.")
     
     # Confirm that the non-fitted parameters between filters match.
     validate_models_before_MCMC(base_models, init_params["parameter_name"])
@@ -380,7 +389,7 @@ def main():
             ("rvol2", float),
         ]
         
-        # Initialize the sampler.
+        # Initialize the sampler.        
         sampler = emcee.EnsembleSampler(nwalkers,
                                         ndim,
                                         log_probability,
@@ -388,10 +397,13 @@ def main():
                                         pool=pool,
                                         blobs_dtype=blobs_dtype,
                                         backend=backend,
+                                        moves=None if use_default_emcee_moves else emcee_moves,
                                        )
         
         # Run the sampler to completion.
-        sampler.run_mcmc(state, nsteps, progress=False)
+        sampler.run_mcmc(p0 if fresh_mcmc else None,
+                         nsteps,
+                         progress=False)
 
 
 if __name__ == "__main__":
