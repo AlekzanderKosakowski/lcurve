@@ -308,10 +308,10 @@ def main():
     ncores = 32
     nwalkers = 2*ncores # Use at least 2*ncores for emcee.moves.RedBlueMove
 
-    nsteps = 50000
+    nsteps = 10000
 
     output_filename = "chain.h5"
-    fresh_mcmc = True
+    fresh_mcmc = False
 
     use_default_emcee_moves = False
     emcee_moves = [ # https://emcee.readthedocs.io/en/stable/user/moves/
