@@ -1,6 +1,6 @@
 import emcee
 import numpy as np
-import os; os.environ["OMP_NUM_THREADS"] = "1" # Avoid oversubscription of resources with OMP
+import os; os.environ["OMP_NUM_THREADS"] = "1" # Avoid oversubscription of resources with OMP star grid building
 import pandas as pd
 import shutil # Used to copy chain.h5 as a backup
 
@@ -9,7 +9,6 @@ from multiprocessing import Pool
 from scipy.optimize import minimize
 
 import sys; sys.path.append("/trm_software/wrapper/")
-import lcurve_wrapper
 from lcurve_model import *
 
 # Define globals accessible to all of the workers.
@@ -262,11 +261,10 @@ def prior_chisq(theta, lroche_output):
         chi_squared += uniform_prior(theta["iangle"], 0.0, 90.0)
 
     if "t1" in theta:
-        chi_squared += gaussian_prior_symmetric(theta["t1"], 28_900, 400)
-        chi_squared += uniform_prior(theta["t1"], 18900, 38900)
+        chi_squared += gaussian_prior_symmetric(theta["t1"], 28900, 400)
 
     if "t2" in theta:
-        chi_squared += uniform_prior(theta["t2"], 500, 50_000)
+        chi_squared += uniform_prior(theta["t2"], 500, 4000)
 
     if np.isinf(chi_squared):
         return np.inf
