@@ -122,11 +122,20 @@ def run_optimize(theta0, variable_parameters):
     N_data = sum(len(model.data) for model in worker_models.values())
 
     N_variable = len(variable_parameters)
+
+    completed_iterations = 0
+    def callback(xk):
+
+        nonlocal completed_iterations
+        completed_iterations += 1
+        if completed_iterations%1==0:
+            print(f"Optimization iterations completed: {completed_iterations}")
     
     fxn = lambda x: -2*log_probability( dict(zip(variable_parameters, x)) )[0]
     results = minimize(fxn,
                        theta0,
                        method="Nelder-Mead",
+                       callback=callback,
                        options={"maxiter":2000,
                                 "fatol":0.01*(N_data - N_variable),
                                 "xatol":np.inf,
