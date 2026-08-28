@@ -351,7 +351,7 @@ def main():
                   }
 
     # Validate that all starting walker positions are allowed.
-    if fresh_mcmc:
+    if fresh_mcmc and not optimize:
         init_worker(base_models)
         initial_probs = [log_probability(dict(zip(init_params["parameter_name"], p0_i))) for p0_i in p0]        
         if np.any(np.isinf(initial_probs)):
