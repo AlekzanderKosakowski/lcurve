@@ -350,6 +350,9 @@ def main():
                    for filter in filters
                   }
 
+    # Confirm that the non-fitted parameters between filters match.
+    validate_models_before_MCMC(base_models, init_params["parameter_name"])
+
     # Validate that all starting walker positions are allowed.
     if fresh_mcmc and not optimize:
 
@@ -359,9 +362,6 @@ def main():
         if np.any(np.isinf(initial_probs)):
             raise ValueError("Some walkers start in invalid parameter space.")
     
-    # Confirm that the non-fitted parameters between filters match.
-    validate_models_before_MCMC(base_models, init_params["parameter_name"])
-
     if optimize:
         print(f"Running simplex optimize with {len(base_models)} filters: {[k for k in base_models]}")
         init_worker(base_models)
