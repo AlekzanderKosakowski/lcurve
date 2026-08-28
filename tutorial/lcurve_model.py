@@ -253,5 +253,6 @@ class Lcurve_model():
         cloned_model.lcurve = self.lcurve.clone() # Clones the C++ LCurve::Model, sharing a reference to the light curve data
         cloned_model.parameters = cloned_model.lcurve.get_model() # Run get_model() on the cloned object, not cloning the original's get_model()
         cloned_model.data = self.data
+        cloned_model.filter = self.filter
         
         return cloned_model
