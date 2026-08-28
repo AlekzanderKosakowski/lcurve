@@ -352,8 +352,10 @@ def main():
 
     # Validate that all starting walker positions are allowed.
     if fresh_mcmc and not optimize:
-        init_worker(base_models)
-        initial_probs = [log_probability(dict(zip(init_params["parameter_name"], p0_i))) for p0_i in p0]        
+
+        with Pool(processes=ncores, initializer=init_worker, initargs=(base_models,)) as pool:
+            initial_probs = pool.map(log_probability, [dict(zip(param_names, p0_i)) for p0_i in p0],)
+        
         if np.any(np.isinf(initial_probs)):
             raise ValueError("Some walkers start in invalid parameter space.")
     
