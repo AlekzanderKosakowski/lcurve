@@ -215,7 +215,7 @@ def log_probability(theta):
                 continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
                 
             elif (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] == model.filter):
-                parameter_name = "_".join(parameter_name0.split("_")[:-1]) # Remove the "_{filter}" text from the parameter name
+                parameter_name = "_".join(parameter_name_F.split("_")[:-1]) # Remove the "_{filter}" text from the parameter name
 
             else: # Not a filter-specific parameter, so use the parameter name as-is
                 parameter_name = parameter_name_F
