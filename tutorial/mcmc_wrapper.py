@@ -307,9 +307,6 @@ def prior_chisq(theta, lroche_output=None):
         
         if "t1" in theta:
             chi_squared += gaussian_prior_symmetric(theta["t1"], 28900, 400)
-
-        if "t2" in theta:
-            chi_squared += gaussian_prior_symmetric(theta["t2"], 35840, 640)
         
         chi_squared += gaussian_prior_symmetric(K1, 71.6, 1.7)
         chi_squared += gaussian_prior_symmetric(lroche_output["logg1"], 5.64, 0.02)
