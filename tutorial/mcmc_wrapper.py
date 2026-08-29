@@ -214,12 +214,11 @@ def log_probability(theta):
         -0.5 * chi_squared
     '''
     chi_squared = 0.0
-
+    
     filters = worker_models.keys()
     
     for filter, model in worker_models.items(): 
         for parameter_name_F, walker_value in theta.items():
-            
             if (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] != model.filter):
                 continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
                 
@@ -231,8 +230,14 @@ def log_probability(theta):
             
             getattr(model.parameters, parameter_name).value = walker_value # Set each parameter
         
-        # Validate the model
+        # Reject models with parameters out of bounds.
         if not model.lcurve.is_legal():
+            return -np.inf, 0.0, 0.0, 0.0, 0.0
+
+        # Apply uniform priors before lroche is called
+        # Skips expensive lroche step if parameters are outside user-defined bounds.
+        chi_squared += prior_chisq(theta,)
+        if np.isinf(chi_squared) or np.isnan(chi_squared):
             return -np.inf, 0.0, 0.0, 0.0, 0.0
         
         try:
@@ -244,7 +249,8 @@ def log_probability(theta):
 
         if np.isinf(chi_squared) or np.isnan(chi_squared):
             return -np.inf, 0.0, 0.0, 0.0, 0.0
-    
+
+    # Run prior_chisq() again with the lroche_output.
     if not np.isinf(chi_squared):
         chi_squared += prior_chisq(theta, lroche_output)
 
@@ -255,58 +261,85 @@ def log_probability(theta):
             lroche_output["rvol2"]
            )
 
-def prior_chisq(theta, lroche_output):
+def prior_chisq(theta, lroche_output=None):
     '''
     Return chi-squared using prior information.
+
+    This is called twice:
+        1) Before lroche() is called: to not waste time running lroche on invalid models
+        2) After lroche() is called: to apply non-uniform priors on lroche outputs
+
+    Keep non-uniform priors within the "if lroche_output is not None" block.
+    Otherwise, the non-uniform priors will be double-counted.
 
     Inputs:
         theta : Python dictionary of fitted parameters
             May contain filter-specific names, such as "ldc1_1_R" and "ldc1_1_V"
-        lroche_output : dictionary
+        lroche_output : dictionary or None
             keys = ['model_flux', 'chisq', 'wnok', 'wdwarf', 'logg1', 'logg2', 'rvol1', 'rvol2', 'ffac1', 'ffac2', 'sfac']
         
     Returns:
         chi_squared : float or np.inf
     '''
-    chi_squared = 0.0
-
-    if "iangle" in theta:
-        chi_squared += uniform_prior(theta["iangle"], 0.0, 90.0)
-
-    if "t1" in theta:
-        chi_squared += gaussian_prior_symmetric(theta["t1"], 28900, 400)
-
-    if "t2" in theta:
-        chi_squared += uniform_prior(theta["t2"], 500, 4000)
-
-    if np.isinf(chi_squared):
-        return np.inf
-
-    use_physical_priors = True
-    if not use_physical_priors:
-        return chi_squared
-    
-    # Priors based on physical constraints
-    period_days = worker_reference_model_parameters["tperiod"]
-
-    # Use fixed reference value from model parameters if not being fitted, else use the current iteration's fit value.
+    period_days = worker_reference_model_parameters["tperiod"]    
     q      = theta["q"] if "q" in theta else worker_reference_model_parameters["q"]
     vscale = theta["velocity_scale"] if "velocity_scale" in theta else worker_reference_model_parameters["velocity_scale"]
     iangle = theta["iangle"] if "iangle" in theta else worker_reference_model_parameters["iangle"]
 
-    a  =  period_days*(86400)/(2*np.pi)*(vscale*1000)/Rsol               # Rsol; assumes circular orbit
-    R1vol = lroche_output["rvol1"] * a
-    R2vol = lroche_output["rvol2"] * a
+    a  =  period_days*(86400)/(2*np.pi)*(vscale*1000)/Rsol               # Rsol
     K1 =  q/(1+q)*vscale*np.sin(np.radians(iangle))                      # km/s
     K2 =  1./(1+q)*vscale*np.sin(np.radians(iangle))                     # km/s
     M1 =  1./(1+q)*(period_days*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol # Msol
     M2 =  q/(1+q)*(period_days*86400)/(2*np.pi*G)*(vscale*1000)**3/Msol  # Msol
-
-    chi_squared += gaussian_prior_symmetric(K1, 71.6, 1.7)
-    chi_squared += gaussian_prior_symmetric(lroche_output["logg1"], 5.64, 0.02)
     
+    chi_squared = 0.0
+
+    # Add uniform priors here.
+
+    if "iangle" in theta:
+        chi_squared += uniform_prior(theta["iangle"], 0.0, 90.0)
+
+    if "t2" in theta:
+        chi_squared += uniform_prior(theta["t2"], 500, 4000)
+
+    if lroche_output is not None:
+        # Add non-uniform priors here.
+        
+        if "t1" in theta:
+            chi_squared += gaussian_prior_symmetric(theta["t1"], 28900, 400)
+
+        if "t2" in theta:
+            chi_squared += gaussian_prior_symmetric(theta["t2"], 35840, 640)
+        
+        chi_squared += gaussian_prior_symmetric(K1, 71.6, 1.7)
+        chi_squared += gaussian_prior_symmetric(lroche_output["logg1"], 5.64, 0.02)
+        
     return chi_squared
     
+def WD_MR(wd_mass):
+    '''
+    Estimate the (minimum) radius of a completely-degenerate pure-helium white dwarf.
+    
+    Verbunt+Rappaport1988 equation 15
+    https://ui.adsabs.harvard.edu/abs/1988ApJ...332..193V/abstract
+
+    Input:
+        wd_mass : float
+            white dwarf mass (solar units)
+
+    Output:
+        wd_radius : float
+            white dwarf radius estimate (solar units)
+    '''
+    M_ch = 1.44
+    M_p = 0.00057
+
+    radius_wd = 0.0114 \
+                * (( wd_mass/M_ch )**(-2./3.) - (wd_mass/M_ch)**(2./3.))**(0.5) \
+                * (1.0 + 3.5*(wd_mass/M_p)**(-2./3.) + (wd_mass/M_p)**(-1))**(-2./3.)
+    
+    return radius_wd
+
 
 def main():
 
