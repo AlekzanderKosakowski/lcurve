@@ -178,7 +178,6 @@ public:
         return *model_;
     }
 
-
     // Write the model parameters to a new parameters.txt file.
     void write_to_parameters_file(const std::string& ofilename) {
         if (!model_) {
@@ -186,6 +185,325 @@ public:
         }
         model_->wrasc(ofilename);    
     }
+
+    // Validate that the model's parameters are legal.
+    // See the original trm_lcurve.cc::is_not_legal()
+    bool is_legal() const {
+
+        if(model_->q.vary){
+            if(model_->q.value < 0. || model_->q.value > 100.) return false;
+        }
+
+        if(model_->iangle.vary){
+            if(model_->iangle.value < 0. || model_->iangle.value > 90.) return false;
+        }
+    
+        if(model_->use_radii){
+            
+
+            if(model_->r1.vary){
+                double xl11 = Roche::xl11(model_->q.value, model_->spin1.value);
+                if(model_->r1.value <= 0. || model_->r1.value >= xl11) return false;
+            }
+            if(model_->r2.vary){
+                double xl12 = 1.0 - Roche::xl12(model_->q.value, model_->spin2.value);
+                if(model_->r2.value <= 0. || model_->r2.value > xl12) return false;
+            }
+        }else{
+            if(model_->cphi3.vary){
+                if(model_->cphi3.value <= 0. || model_->cphi3.value > 0.25) return false;
+            }
+            if(model_->cphi4.vary){
+                if(model_->cphi4.value <= 0. || model_->cphi4.value > 0.25) return false;
+            }
+        }
+
+        if(model_->r3.vary) {
+            if(model_->r3.value < 0.) return false;
+        }
+
+
+        if(model_->spin1.vary) {
+            if(model_->spin1.value <= 0. || model_->spin1.value > 1000.) return false;
+        }
+    
+        if(model_->spin2.vary) {
+            if(model_->spin2.value <= 0. || model_->spin2.value > 1000.) return false;
+        }
+    
+        if(model_->t1.vary) {
+            if(model_->t1.value <= 500. || model_->t1.value > 1.e6) return false;
+        }
+    
+        if(model_->t2.vary) {
+            if(model_->t2.value <= 500. || model_->t2.value > 1.e6) return false;
+        }
+    
+        if(model_->t3.vary) {
+            if(model_->t3.value <= 500. || model_->t3.value > 1.e6) return false;
+        }
+
+
+
+        if(model_->ldc1_1.vary){
+            if(model_->ldc1_1.value < -2. || model_->ldc1_1.value > 2.) return false;
+        }
+    
+        if(model_->ldc1_2.vary){
+            if(model_->ldc1_2.value < -2. || model_->ldc1_2.value > 2.) return false;
+        }
+    
+        if(model_->ldc1_3.vary){
+            if(model_->ldc1_3.value < -2. || model_->ldc1_3.value > 2.) return false;
+        }
+    
+        if(model_->ldc1_4.vary){
+            if(model_->ldc1_4.value < -2. || model_->ldc1_4.value > 2.) return false;
+        }
+    
+        if(model_->ldc2_1.vary){
+            if(model_->ldc2_1.value < -2. || model_->ldc2_1.value > 2.) return false;
+        }
+    
+        if(model_->ldc2_2.vary){
+            if(model_->ldc2_2.value < -2. || model_->ldc2_2.value > 2.) return false;
+        }
+    
+        if(model_->ldc2_3.vary){
+            if(model_->ldc2_3.value < -2. || model_->ldc2_3.value > 2.) return false;
+        }
+    
+        if(model_->ldc2_4.vary){
+            if(model_->ldc2_4.value < -2. || model_->ldc2_4.value > 2.) return false;
+        }
+    
+        if(model_->ldc3_1.vary){
+            if(model_->ldc3_1.value < -2. || model_->ldc3_1.value > 2.) return false;
+        }
+    
+        if(model_->ldc3_2.vary){
+            if(model_->ldc3_2.value < -2. || model_->ldc3_2.value > 2.) return false;
+        }
+    
+        if(model_->ldc3_3.vary){
+            if(model_->ldc3_3.value < -2. || model_->ldc3_3.value > 2.) return false;
+        }
+    
+        if(model_->ldc3_4.vary){
+            if(model_->ldc3_4.value < -2. || model_->ldc3_4.value > 2.) return false;
+        }
+
+        if(model_->period.vary) {
+            if(model_->period.value <= 1.e-3 || model_->period.value > 100.) return false;
+        }
+
+        if(model_->deltat.vary) {
+            if(model_->deltat.value <= -1. || model_->deltat.value > 1.) return false;
+        }
+
+        if(model_->gravity_dark1.vary){
+            if(model_->gravity_dark1.value < -1. || model_->gravity_dark1.value > 1.) return false;
+        }
+    
+        if(model_->gravity_dark2.vary){
+            if(model_->gravity_dark2.value < -1. || model_->gravity_dark2.value > 1.) return false;
+        }
+    
+        if(model_->absorb.vary){
+            if(model_->absorb.value < 0. || model_->absorb.value > 10.) return false;
+        }
+    
+        if(model_->slope.vary){
+            if(model_->slope.value < -2. || model_->slope.value > 2.) return false;
+        }
+    
+        if(model_->quad.vary){
+            if(model_->quad.value < -2. || model_->quad.value > 2.) return false;
+        }
+    
+        if(model_->cube.vary){
+            if(model_->cube.value < -2. || model_->cube.value > 2.) return false;
+        }
+
+        if(model_->add_disc){
+
+            if(model_->rdisc1.vary){
+                if(model_->rdisc1.value < 0. || model_->rdisc1.value > 1.) return false;
+            }
+
+            if(model_->rdisc2.vary){
+                if(model_->rdisc2.value < 0. || model_->rdisc2.value > 1.) return false;
+            }
+
+            if(model_->height_disc.vary){
+                if(model_->height_disc.value < 0.) return false;
+            }
+
+            if(model_->beta_disc.vary){
+                if(model_->beta_disc.value < 1. || model_->beta_disc.value > 100.) return false;
+            }
+
+            if(model_->temp_disc.vary){
+                if(model_->temp_disc.value < 500. || model_->temp_disc.value > 1.e6) return false;
+            }
+
+            if(model_->texp_disc.vary){
+                if(model_->texp_disc.value < -100. || model_->texp_disc.value > 100.) return false;
+            }
+
+            if(model_->lin_limb_disc.vary){
+                if(model_->lin_limb_disc.value < 0. || model_->lin_limb_disc.value > 1.) return false;
+            }
+
+            if(model_->quad_limb_disc.vary){
+                if(model_->quad_limb_disc.value < 0. || model_->quad_limb_disc.value > 1.) return false;
+            }
+
+            if(model_->temp_edge.vary){
+                if(model_->temp_edge.value <= 0. || model_->temp_edge.value > 1.e6) return false;
+            }
+
+            if(model_->absorb_edge.vary){
+                if(model_->absorb_edge.value < 0. || model_->absorb_edge.value > 10.) return false;
+            }
+        }
+
+        if(model_->add_spot){
+    
+            if(model_->radius_spot.vary){
+                if(model_->radius_spot.value < 0. || model_->radius_spot.value > 1.) return false;
+            }
+    
+            if(model_->length_spot.vary){
+                if(model_->length_spot.value < 0. || model_->length_spot.value > 1.) return false;
+            }
+    
+            if(model_->height_spot.vary){
+                if(model_->height_spot.value < 0. || model_->height_spot.value > 1.) return false;
+            }
+    
+            if(model_->expon_spot.vary){
+                if(model_->expon_spot.value <= 0. || model_->expon_spot.value > 100.) return false;
+            }
+    
+            if(model_->epow_spot.vary){
+                if(model_->epow_spot.value <= 0. || model_->epow_spot.value > 10.) return false;
+            }
+    
+            if(model_->angle_spot.vary){
+                if(model_->angle_spot.value < -1000. || model_->angle_spot.value > 1000.) return false;
+            }
+    
+            if(model_->yaw_spot.vary){
+                if(model_->yaw_spot.value < -1000. || model_->yaw_spot.value > 1000.) return false;
+            }
+    
+            if(model_->temp_spot.vary){
+                if(model_->temp_spot.value < 0. || model_->temp_spot.value > 1.e10) return false;
+            }
+    
+            if(model_->tilt_spot.vary){
+                if(model_->tilt_spot.value < -1000. || model_->tilt_spot.value > 1000.) return false;
+            }
+    
+            if(model_->cfrac_spot.vary){
+                if(model_->cfrac_spot.value < 0. || model_->cfrac_spot.value > 1.) return false;
+            }
+        }
+    
+        if(model_->stsp11_long.defined && model_->stsp11_long.vary){
+            if(model_->stsp11_long.value < -400. || model_->stsp11_long.value > 400.) return false;
+        }
+        if(model_->stsp11_lat.defined && model_->stsp11_lat.vary){
+            if(model_->stsp11_lat.value < -90. || model_->stsp11_lat.value > 90.) return false;
+        }
+        if(model_->stsp11_fwhm.defined  && model_->stsp11_fwhm.vary){
+            if(model_->stsp11_fwhm.value <= 0. || model_->stsp11_fwhm.value > 180.) return false;
+        }
+        if(model_->stsp11_tcen.defined  && model_->stsp11_tcen.vary){
+            if(model_->stsp11_tcen.value <= 0.) return false;
+        }
+
+        if(model_->stsp12_long.defined && model_->stsp12_long.vary){
+            if(model_->stsp12_long.value < -400. || model_->stsp12_long.value > 400.) return false;
+        }
+        if(model_->stsp12_lat.defined && model_->stsp12_lat.vary){
+            if(model_->stsp12_lat.value < -90. || model_->stsp12_lat.value > 90.) return false;
+        }
+        if(model_->stsp12_fwhm.defined  && model_->stsp12_fwhm.vary){
+            if(model_->stsp12_fwhm.value <= 0. || model_->stsp12_fwhm.value > 180.) return false;
+        }
+        if(model_->stsp12_tcen.defined  && model_->stsp12_tcen.vary){
+            if(model_->stsp12_tcen.value <= 0.) return false;
+        }
+
+        if(model_->stsp13_long.defined && model_->stsp13_long.vary){
+            if(model_->stsp13_long.value < -400. || model_->stsp13_long.value > 400.) return false;
+        }
+        if(model_->stsp13_lat.defined && model_->stsp13_lat.vary){
+            if(model_->stsp13_lat.value < -90. || model_->stsp13_lat.value > 90.) return false;
+        }
+        if(model_->stsp13_fwhm.defined  && model_->stsp13_fwhm.vary){
+            if(model_->stsp13_fwhm.value <= 0. || model_->stsp13_fwhm.value > 180.) return false;
+        }
+        if(model_->stsp13_tcen.defined  && model_->stsp13_tcen.vary){
+            if(model_->stsp13_tcen.value <= 0.) return false;
+        }
+        
+        if(model_->stsp21_long.defined && model_->stsp21_long.vary){
+            if(model_->stsp21_long.value < -400. || model_->stsp21_long.value > 400.) return false;
+        }
+        if(model_->stsp21_lat.defined && model_->stsp21_lat.vary){
+            if(model_->stsp21_lat.value < -90. || model_->stsp21_lat.value > 90.) return false;
+        }
+        if(model_->stsp21_fwhm.defined  && model_->stsp21_fwhm.vary){
+            if(model_->stsp21_fwhm.value <= 0. || model_->stsp21_fwhm.value > 180.) return false;
+        }
+        if(model_->stsp21_tcen.defined  && model_->stsp21_tcen.vary){
+            if(model_->stsp21_tcen.value <= 0.) return false;
+        }
+
+        if(model_->stsp22_long.defined && model_->stsp22_long.vary){
+            if(model_->stsp22_long.value < -400. || model_->stsp22_long.value > 400.) return false;
+        }
+        if(model_->stsp22_lat.defined && model_->stsp22_lat.vary){
+            if(model_->stsp22_lat.value < -90. || model_->stsp22_lat.value > 90.) return false;
+        }
+        if(model_->stsp22_fwhm.defined  && model_->stsp22_fwhm.vary){
+            if(model_->stsp22_fwhm.value <= 0. || model_->stsp22_fwhm.value > 180.) return false;
+        }
+        if(model_->stsp22_tcen.defined  && model_->stsp22_tcen.vary){
+            if(model_->stsp22_tcen.value <= 0.) return false;
+        }
+
+        if(model_->stsp1i_long.defined && model_->stsp1i_long.vary) {
+            if(model_->stsp1i_long.value < -400. || model_->stsp1i_long.value > 400.) return false;
+        }
+
+        if(model_->stsp1i_lat.defined && model_->stsp1i_lat.vary) {
+            if(model_->stsp1i_lat.value < -90. || model_->stsp1i_lat.value > 90.) return false;
+        }
+
+        if(model_->stsp1i_fwhm_long.defined && model_->stsp1i_fwhm_long.vary) {
+            if(model_->stsp1i_fwhm_long.value < 0. || model_->stsp1i_fwhm_long.value > 180.) return false;
+        }
+
+        if(model_->stsp1i_fwhm_lat.defined && model_->stsp1i_fwhm_lat.vary) {
+            if(model_->stsp1i_fwhm_lat.value <= 0. || model_->stsp1i_fwhm_lat.value > 180.) return false;
+        }
+
+        if(model_->stsp1i_escale_len.defined && model_->stsp1i_escale_len.vary) {
+            if(model_->stsp1i_escale_len.value < 0. || model_->stsp1i_escale_len.value > 400.) return false;
+        }
+
+        if(model_->stsp1i_tcen.defined && model_->stsp1i_tcen.vary) {
+            if(model_->stsp1i_tcen.value <= 0.) return false;
+        }
+
+        return true;
+    }
+
+
 
     // Update the values for the variable parameters in bulk
     // Provide a list of floats for each parameter (order matters)
@@ -714,6 +1032,9 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
             &LCurveWrapper::set_params,
             py::arg("params")
         )
+        .def("is_legal",
+            &LCurveWrapper::is_legal
+        )
         .def("get_params",
             &LCurveWrapper::get_params
         )
@@ -754,4 +1075,3 @@ PYBIND11_MODULE(lcurve_wrapper, m) {
         );
             
 }
-
