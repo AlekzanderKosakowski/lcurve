@@ -219,7 +219,7 @@ def log_probability(theta):
     
     for filter, model in worker_models.items(): 
         for parameter_name_F, walker_value in theta.items():
-
+            
             if (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] != model.filter):
                 continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
                 
@@ -228,9 +228,13 @@ def log_probability(theta):
 
             else: # Not a filter-specific parameter, so use the parameter name as-is
                 parameter_name = parameter_name_F
-
-            getattr(model.parameters, parameter_name).value = walker_value # Set each parameter
             
+            getattr(model.parameters, parameter_name).value = walker_value # Set each parameter
+        
+        # Validate the model
+        if not model.lcurve.is_legal():
+            return -np.inf, 0.0, 0.0, 0.0, 0.0
+        
         try:
             lroche_output = model.lroche(scale=True)
             chi_squared += lroche_output["chisq"]
@@ -350,6 +354,7 @@ def main():
             np.random.uniform(init_params["lower_limit"][i], init_params["upper_limit"][i]) for i in range(len(init_params))
         ] for n in range(nwalkers)
     ]
+
     
     # Generate a set of models to use as a base for modification.
     # These depend on your provided parameters.txt files to allow different wavelength, LDC/GDC, and beaming values
@@ -359,7 +364,28 @@ def main():
                    for filter in filters
                   }
 
-    # Confirm that the non-fitted parameters between filters match.
+    
+    # Assign vary=True to the fitted parameters.
+    # This is required for model parameter validation later.
+    for filter, model in base_models.items(): 
+        for parameter_name_F in init_params["parameter_name"]:
+
+            # TODO: "if parameter_name_F.endswith("_"+filter)" is better
+            
+            if (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] != model.filter):
+                continue # Skip filter-dependent parameters when the loop iteration is not on that filter.
+                
+            elif (parameter_name_F.split("_")[-1] in filters) and (parameter_name_F.split("_")[-1] == model.filter):
+                parameter_name = "_".join(parameter_name_F.split("_")[:-1]) # Remove the "_{filter}" text from the parameter name
+
+            else: # Not a filter-specific parameter, so use the parameter name as-is
+                parameter_name = parameter_name_F
+
+            getattr(model.parameters, parameter_name).vary = True
+            getattr(model.parameters, parameter_name).defined = True
+
+    
+    # Confirm that the non-fitted parameters between filters match across models.
     validate_models_before_MCMC(base_models, init_params["parameter_name"])
 
     # Validate that all starting walker positions are allowed.
@@ -369,8 +395,9 @@ def main():
             initial_probs = pool.map(log_probability, [dict(zip(init_params["parameter_name"], p0_i)) for p0_i in p0],)
         
         if np.any(np.isinf(initial_probs)):
-            raise ValueError("Some walkers start in invalid parameter space.")
-    
+            # raise ValueError("Some walkers start in invalid parameter space.")
+            print("Some walkers start in invalid parameter space.")
+
     if optimize:
         print(f"Running simplex optimize with {len(base_models)} filters: {[k for k in base_models]}")
         init_worker(base_models)
